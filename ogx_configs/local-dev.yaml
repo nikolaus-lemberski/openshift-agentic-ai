@@ -1,0 +1,67 @@
+version: 2
+distro_name: local-dev
+
+apis:
+  - responses
+  - inference
+  - vector_io
+  - files
+  - tool_runtime
+
+providers:
+  inference:
+    - provider_id: local-ollama
+      provider_type: remote::ollama
+      config:
+        url: ${env.OLLAMA_URL:=http://localhost:11434}
+  files:
+    - provider_id: local-files
+      provider_type: inline::localfs
+      config:
+        storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/local-dev/files}
+        metadata_store:
+          table_name: files_metadata
+          backend: sql_default
+  vector_io:
+    - provider_id: local-vector
+      provider_type: inline::sqlite-vec
+      config:
+        db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/local-dev}/sqlite_vec.db
+        persistence:
+          namespace: vector_io::sqlite_vec
+          backend: kv_default
+  tool_runtime:
+    - provider_id: local-tool-runtime
+      provider_type: inline::file-search
+      config: {}
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
+      config:
+        persistence:
+          responses:
+            table_name: responses
+            backend: sql_default
+
+registered_resources:
+  models:
+    - model_id: triage-model
+      provider_id: local-ollama
+      provider_model_id: ${env.OLLAMA_MODEL:=granite3.3:8b}
+      model_type: llm
+      metadata:
+        _unprefixed_alias: true
+
+connectors:
+  - connector_id: "mcp::patient-records"
+    connector_type: mcp
+    url: "http://localhost:8081/mcp"
+  - connector_id: "mcp::medical-knowledge"
+    connector_type: mcp
+    url: "http://localhost:8082/mcp"
+  - connector_id: "mcp::scheduling"
+    connector_type: mcp
+    url: "http://localhost:8083/mcp"
+
+server:
+  port: 8321

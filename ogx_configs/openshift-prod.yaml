@@ -1,0 +1,83 @@
+version: 2
+distro_name: openshift-prod
+
+apis:
+  - responses
+  - inference
+  - vector_io
+  - files
+  - tool_runtime
+
+providers:
+  inference:
+    - provider_id: granite-fast
+      provider_type: remote::openai
+      config:
+        url: https://granite-8b.openshift-ai.svc:8080/v1
+    - provider_id: qwen-powerful
+      provider_type: remote::openai
+      config:
+        url: https://qwen-32b.openshift-ai.svc:8080/v1
+  files:
+    - provider_id: prod-files
+      provider_type: inline::localfs
+      config:
+        storage_dir: /data/files
+        metadata_store:
+          table_name: files_metadata
+          backend: sql_default
+  vector_io:
+    - provider_id: prod-vector
+      provider_type: inline::sqlite-vec
+      config:
+        db_path: /data/sqlite_vec.db
+        persistence:
+          namespace: vector_io::sqlite_vec
+          backend: kv_default
+  tool_runtime:
+    - provider_id: prod-tool-runtime
+      provider_type: inline::file-search
+      config: {}
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
+      config:
+        persistence:
+          responses:
+            table_name: responses
+            backend: sql_default
+
+registered_resources:
+  models:
+    - model_id: triage-model
+      provider_id: granite-fast
+      provider_model_id: granite-3.3-8b-instruct
+      model_type: llm
+      metadata:
+        _unprefixed_alias: true
+    - model_id: granite-3.3-8b
+      provider_id: granite-fast
+      provider_model_id: granite-3.3-8b-instruct
+      model_type: llm
+      metadata:
+        _unprefixed_alias: true
+    - model_id: qwen-2.5-32b
+      provider_id: qwen-powerful
+      provider_model_id: qwen-2.5-32b-instruct
+      model_type: llm
+      metadata:
+        _unprefixed_alias: true
+
+connectors:
+  - connector_id: "mcp::patient-records"
+    connector_type: mcp
+    url: "http://mcp-patient-records:8080/mcp"
+  - connector_id: "mcp::medical-knowledge"
+    connector_type: mcp
+    url: "http://mcp-medical-knowledge:8080/mcp"
+  - connector_id: "mcp::scheduling"
+    connector_type: mcp
+    url: "http://mcp-scheduling:8080/mcp"
+
+server:
+  port: 8321

@@ -1,0 +1,18 @@
+# Python virtual environments
+.venv/
+__pycache__/
+
+# Quarkus
+*/target/
+*/.quarkus/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
