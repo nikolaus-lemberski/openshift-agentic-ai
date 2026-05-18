@@ -58,10 +58,10 @@ graph LR
 
 ## Prerequisites
 
+- **Podman** with `podman compose` (or Docker with `docker compose`)
 - **Ollama** installed and running (`ollama serve`)
 - **uv** installed (`brew install uv` or see https://docs.astral.sh/uv/)
-- **Quarkus CLI** installed (`quarkus --version`)
-- **Java 21+**
+- **Java 25+** (for local `quarkus dev` only; container builds use UBI10 openjdk-25)
 
 ## Step 1: Set Up OGX in a Local Virtual Environment
 
@@ -70,20 +70,20 @@ Create a Python virtual environment inside the `ogx_configs/` directory using `u
 ```bash
 cd ogx_configs/
 uv venv .venv --python 3.12
-uv pip install ogx --python .venv/bin/python
+uv pip install ogx ollama --python .venv/bin/python
 ```
 
 The `.venv/` directory is gitignored. Run OGX via the venv-local binary:
 
 ```bash
-ogx_configs/.venv/bin/ogx stack run ogx_configs/local-dev.yaml
+ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
 ```
 
 Or activate the venv first:
 
 ```bash
 source ogx_configs/.venv/bin/activate
-ogx stack run ogx_configs/local-dev.yaml
+ogx run ogx_configs/local-dev.yaml
 deactivate
 ```
 
@@ -109,103 +109,19 @@ Either model works -- OGX maps the logical alias `triage-model` to whichever you
 
 ## Step 3: OGX Configuration Files
 
-Two OGX config files live in `ogx_configs/`:
+Two OGX config files live in `ogx_configs/`. See the actual files for the full configuration; below is a summary of the key differences.
 
 ### `ogx_configs/local-dev.yaml` -- Local Development
 
-Uses Ollama as the inference provider with MCP servers running on localhost:
-
-```yaml
-version: 2
-distro_name: local-dev
-
-apis:
-  - responses
-  - inference
-
-providers:
-  inference:
-    - provider_id: local-ollama
-      provider_type: remote::ollama
-      config:
-        url: ${env.OLLAMA_URL:=http://localhost:11434}
-  responses:
-    - provider_id: builtin
-      provider_type: inline::builtin
-      config: {}
-
-models:
-  - model_id: triage-model
-    provider_id: local-ollama
-    provider_model_id: ${env.OLLAMA_MODEL:=granite3.3:8b}
-
-connectors:
-  - connector_id: "mcp::patient-records"
-    connector_type: mcp
-    url: "http://localhost:8081/mcp"
-  - connector_id: "mcp::medical-knowledge"
-    connector_type: mcp
-    url: "http://localhost:8082/mcp"
-  - connector_id: "mcp::scheduling"
-    connector_type: mcp
-    url: "http://localhost:8083/mcp"
-
-server:
-  port: 8321
-```
+- Inference: `remote::ollama` pointing at `localhost:11434`
+- MCP connectors: `localhost:8081-8083`
+- Model alias: `triage-model` -> `granite3.3:8b` (or `$OLLAMA_MODEL`)
 
 ### `ogx_configs/openshift-prod.yaml` -- OpenShift Production (reference)
 
-Uses vLLM instances as inference providers with MCP servers as k8s services:
-
-```yaml
-version: 2
-distro_name: openshift-prod
-
-apis:
-  - responses
-  - inference
-
-providers:
-  inference:
-    - provider_id: granite-fast
-      provider_type: remote::openai
-      config:
-        url: https://granite-8b.openshift-ai.svc:8080/v1
-    - provider_id: qwen-powerful
-      provider_type: remote::openai
-      config:
-        url: https://qwen-32b.openshift-ai.svc:8080/v1
-  responses:
-    - provider_id: builtin
-      provider_type: inline::builtin
-      config: {}
-
-models:
-  - model_id: triage-model
-    provider_id: granite-fast
-    provider_model_id: granite-3.3-8b-instruct
-  - model_id: granite-3.3-8b
-    provider_id: granite-fast
-    provider_model_id: granite-3.3-8b-instruct
-  - model_id: qwen-2.5-32b
-    provider_id: qwen-powerful
-    provider_model_id: qwen-2.5-32b-instruct
-
-connectors:
-  - connector_id: "mcp::patient-records"
-    connector_type: mcp
-    url: "http://mcp-patient-records:8080/mcp"
-  - connector_id: "mcp::medical-knowledge"
-    connector_type: mcp
-    url: "http://mcp-medical-knowledge:8080/mcp"
-  - connector_id: "mcp::scheduling"
-    connector_type: mcp
-    url: "http://mcp-scheduling:8080/mcp"
-
-server:
-  port: 8321
-```
+- Inference: `remote::openai` pointing at vLLM service URLs
+- MCP connectors: k8s service names (`mcp-patient-records:8080`, etc.)
+- Model aliases: `triage-model` -> `granite-3.3-8b-instruct`, plus `qwen-2.5-32b`
 
 The diff between the two configs is the **entire "local to prod" story**: swap `remote::ollama` for `remote::openai`, change URLs from localhost to k8s service names. The Quarkus apps are untouched.
 
@@ -230,33 +146,71 @@ triage.system-prompt=You are a clinical triage assistant for hospital nurses. \
   Flag red flags and recommended immediate actions clearly.
 ```
 
-### MCP Servers (`mcp-*/src/main/resources/application.properties`)
+### MCP Servers
 
-```properties
-# Each MCP server just needs its port configured
-quarkus.http.port=${HTTP_PORT:8081}   # 8082 for medical-knowledge, 8083 for scheduling
-```
-
-No AI-related config in MCP servers -- they are plain Quarkus apps with `@Tool` annotations.
+No AI-related config in MCP servers -- they are plain Quarkus apps with `@Tool` annotations. Each runs on the default port 8080 inside its container; port mapping is handled by Podman Compose.
 
 ## Running Locally
 
-### Option A: Separate Terminals (recommended for development)
+### Step 1: Start MCP servers with Podman Compose
+
+Build and start all three MCP servers as containers:
+
+```bash
+podman compose up --build
+```
+
+Once the images are built, subsequent starts are faster:
+
+```bash
+podman compose up -d
+```
+
+This starts all three MCP servers in the background, mapped to the expected ports:
+
+| Container | Host Port |
+|-----------|-----------|
+| mcp-patient-records | 8081 |
+| mcp-medical-knowledge | 8082 |
+| mcp-scheduling | 8083 |
+
+To stop them:
+
+```bash
+podman compose down
+```
+
+### Step 2: Start Ollama (if not already running)
+
+```bash
+ollama serve
+```
+
+### Step 3: Start OGX
+
+```bash
+ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
+```
+
+OGX connects to the MCP servers on `localhost:8081-8083` and to Ollama on `localhost:11434`.
+
+### Step 4: Start the Chat UI (once built)
+
+```bash
+cd triage-assistant && quarkus dev
+```
+
+Open `http://localhost:8080` and interact with the triage assistant.
+
+### Alternative: Quarkus Dev Mode (without containers)
+
+For rapid iteration on MCP server code, run them directly with `quarkus dev` instead of Podman:
 
 ```
 Terminal 1: cd mcp-patient-records && quarkus dev -Dquarkus.http.port=8081
 Terminal 2: cd mcp-medical-knowledge && quarkus dev -Dquarkus.http.port=8082
 Terminal 3: cd mcp-scheduling && quarkus dev -Dquarkus.http.port=8083
-Terminal 4: ollama serve  (if not already running)
-Terminal 5: ogx_configs/.venv/bin/ogx stack run ogx_configs/local-dev.yaml
-Terminal 6: cd triage-assistant && quarkus dev
 ```
-
-Open `http://localhost:8080` and interact with the triage assistant.
-
-### Option B: Startup Script
-
-Run `./dev-start.sh` from the project root. It starts all MCP servers, the OGX server, and the Quarkus chat UI in background processes.
 
 ## Port Assignments
 
