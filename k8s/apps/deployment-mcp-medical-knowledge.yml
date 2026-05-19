@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-medical-knowledge
+  namespace: triage-assistant
+  labels:
+    app: mcp-medical-knowledge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-medical-knowledge
+  template:
+    metadata:
+      labels:
+        app: mcp-medical-knowledge
+    spec:
+      containers:
+        - name: mcp-medical-knowledge
+          image: quay.io/nlembers/agentic-ai-webinar-2026-mcp-medical-knowledge:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-medical-knowledge
+  namespace: triage-assistant
+  labels:
+    app: mcp-medical-knowledge
+spec:
+  selector:
+    app: mcp-medical-knowledge
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP

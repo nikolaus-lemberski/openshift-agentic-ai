@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: triage-assistant
+  namespace: triage-assistant
+  labels:
+    app: triage-assistant
+spec:
+  to:
+    kind: Service
+    name: triage-assistant
+    weight: 100
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

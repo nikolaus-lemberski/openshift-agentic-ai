@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triage-assistant
+  namespace: triage-assistant
+  labels:
+    app: triage-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triage-assistant
+  template:
+    metadata:
+      labels:
+        app: triage-assistant
+    spec:
+      containers:
+        - name: triage-assistant
+          image: quay.io/nlembers/agentic-ai-webinar-2026-triage-assistant:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LLAMA_STACK_URL
+              value: http://triage-llamastack-service:8321
+            - name: MODEL_NAME
+              value: mistral-vllm/mistral-small-3-1-24b
+            - name: MCP_PATIENT_RECORDS_URL
+              value: http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp/sse
+            - name: MCP_MEDICAL_KNOWLEDGE_URL
+              value: http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp/sse
+            - name: MCP_SCHEDULING_URL
+              value: http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp/sse
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

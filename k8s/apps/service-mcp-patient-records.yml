@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-patient-records
+  namespace: triage-assistant
+  labels:
+    app: mcp-patient-records
+spec:
+  selector:
+    app: mcp-patient-records
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP

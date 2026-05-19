@@ -66,13 +66,13 @@ data:
     connectors:
       - connector_id: "mcp::patient-records"
         connector_type: mcp
-        url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp"
+        url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp/sse"
       - connector_id: "mcp::medical-knowledge"
         connector_type: mcp
-        url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp"
+        url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp/sse"
       - connector_id: "mcp::scheduling"
         connector_type: mcp
-        url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
+        url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp/sse"
 
     storage:
       backends:

@@ -30,13 +30,16 @@ public class TriageService {
     @ConfigProperty(name = "triage.mcp.scheduling.url")
     String schedulingUrl;
 
-    public ChatResponse chat(String userMessage, String previousResponseId) {
-        List<ToolConfig> tools = List.of(
+    List<ToolConfig> getTools() {
+        return List.of(
                 ToolConfig.mcp("patient-records", patientRecordsUrl),
                 ToolConfig.mcp("medical-knowledge", medicalKnowledgeUrl),
                 ToolConfig.mcp("scheduling", schedulingUrl));
+    }
 
-        var request = new ResponseRequest(model, systemPrompt, userMessage, tools, previousResponseId, "default");
+    public ChatResponse chat(String userMessage, String previousResponseId) {
+
+        var request = new ResponseRequest(model, systemPrompt, userMessage, getTools(), previousResponseId, "default");
         var result = llamaStack.createResponse(request);
         return buildChatResponse(result);
     }

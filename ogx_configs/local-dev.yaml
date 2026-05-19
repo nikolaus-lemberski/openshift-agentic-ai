@@ -58,13 +58,13 @@ registered_resources:
 connectors:
   - connector_id: "mcp::patient-records"
     connector_type: mcp
-    url: "${env.MCP_PATIENT_RECORDS_URL:=http://localhost:8081/mcp}"
+    url: "${env.MCP_PATIENT_RECORDS_URL:=http://localhost:8081/mcp/sse}"
   - connector_id: "mcp::medical-knowledge"
     connector_type: mcp
-    url: "${env.MCP_MEDICAL_KNOWLEDGE_URL:=http://localhost:8082/mcp}"
+    url: "${env.MCP_MEDICAL_KNOWLEDGE_URL:=http://localhost:8082/mcp/sse}"
   - connector_id: "mcp::scheduling"
     connector_type: mcp
-    url: "${env.MCP_SCHEDULING_URL:=http://localhost:8083/mcp}"
+    url: "${env.MCP_SCHEDULING_URL:=http://localhost:8083/mcp/sse}"
 
 server:
   port: 8321

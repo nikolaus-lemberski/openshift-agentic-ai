@@ -6,9 +6,9 @@ services:
     environment:
       RUN_CONFIG_PATH: /app/config.yaml
       OLLAMA_URL: http://host.docker.internal:11434
-      MCP_PATIENT_RECORDS_URL: http://mcp-patient-records:8080/mcp
-      MCP_MEDICAL_KNOWLEDGE_URL: http://mcp-medical-knowledge:8080/mcp
-      MCP_SCHEDULING_URL: http://mcp-scheduling:8080/mcp
+      MCP_PATIENT_RECORDS_URL: http://mcp-patient-records:8080/mcp/sse
+      MCP_MEDICAL_KNOWLEDGE_URL: http://mcp-medical-knowledge:8080/mcp/sse
+      MCP_SCHEDULING_URL: http://mcp-scheduling:8080/mcp/sse
       LLAMA_STACK_LOGGING: agents=debug,inference=debug
     depends_on:
       - mcp-patient-records
@@ -22,9 +22,9 @@ services:
     environment:
       LLAMA_STACK_URL: http://ogx-server:8321
       MODEL_NAME: local-ollama/${OLLAMA_MODEL:-qwen3.5:9b}
-      MCP_PATIENT_RECORDS_URL: http://mcp-patient-records:8080/mcp
-      MCP_MEDICAL_KNOWLEDGE_URL: http://mcp-medical-knowledge:8080/mcp
-      MCP_SCHEDULING_URL: http://mcp-scheduling:8080/mcp
+      MCP_PATIENT_RECORDS_URL: http://mcp-patient-records:8080/mcp/sse
+      MCP_MEDICAL_KNOWLEDGE_URL: http://mcp-medical-knowledge:8080/mcp/sse
+      MCP_SCHEDULING_URL: http://mcp-scheduling:8080/mcp/sse
     depends_on:
       - ogx-server
 
