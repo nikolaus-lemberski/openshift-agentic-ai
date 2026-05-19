@@ -104,8 +104,9 @@ The primary demo follows Maria Garcia: lookup -> triage (headaches + blurred vis
 
 ## Local Development Environment
 
-- OGX is installed in a **Python virtual environment** at `ogx_configs/.venv/`, created with `uv` (not installed globally)
-- Run OGX via `ogx_configs/.venv/bin/ogx stack run ogx_configs/local-dev.yaml`
+- **Recommended:** Run OGX via `podman compose up` -- the `ogx/distribution-starter` container image is used, no Python venv needed
+- **Alternative:** OGX can be installed in a Python virtual environment at `ogx_configs/.venv/` via `uv` for debugging OGX itself
+- The `ogx_configs/local-dev.yaml` config works in both modes -- MCP URLs are parameterized with env vars (defaulting to localhost)
 - Local dev uses **Ollama** as the inference provider (`remote::ollama`) with `granite3.3:8b` or `qwen3:14b`
 - The logical model alias `triage-model` is the same in local dev and production -- only the OGX config differs
 - The only env var that changes between local and prod for the Quarkus chat UI is `LLAMA_STACK_URL`

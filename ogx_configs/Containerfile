@@ -1,0 +1,2 @@
+FROM llamastack/distribution-starter
+COPY local-dev.yaml /app/config.yaml

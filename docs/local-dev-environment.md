@@ -60,12 +60,18 @@ graph LR
 
 - **Podman** with `podman compose` (or Docker with `docker compose`)
 - **Ollama** installed and running (`ollama serve`)
-- **uv** installed (`brew install uv` or see https://docs.astral.sh/uv/)
 - **Java 25+** (for local `quarkus dev` only; container builds use UBI10 openjdk-25)
+- **uv** (only needed if running OGX outside of compose; `brew install uv` or see https://docs.astral.sh/uv/)
 
-## Step 1: Set Up OGX in a Local Virtual Environment
+## Step 1: Set Up OGX
 
-Create a Python virtual environment inside the `ogx_configs/` directory using `uv`, keeping OGX isolated from the system Python:
+### Using Compose (recommended)
+
+No setup needed -- OGX runs as a container via `podman compose up`. The `llamastack/distribution-starter` image is pulled automatically.
+
+### Using a Local Virtual Environment (Option B)
+
+Only needed if you want to run OGX directly on the host (e.g. for debugging). Create a Python virtual environment inside the `ogx_configs/` directory using `uv`:
 
 ```bash
 cd ogx_configs/
@@ -79,15 +85,7 @@ The `.venv/` directory is gitignored. Run OGX via the venv-local binary:
 ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
 ```
 
-Or activate the venv first:
-
-```bash
-source ogx_configs/.venv/bin/activate
-ogx run ogx_configs/local-dev.yaml
-deactivate
-```
-
-This keeps OGX completely isolated -- no global Python packages polluted. The `ogx_configs/` directory is the self-contained home for everything OGX: the venv, the local dev config, and the production reference config.
+The `ogx_configs/` directory is the self-contained home for everything OGX: the venv (if used), the local dev config, and the production reference config.
 
 ## Step 2: Pull an Ollama Model with Tool Calling Support
 
@@ -152,49 +150,40 @@ No AI-related config in MCP servers -- they are plain Quarkus apps with `@Tool` 
 
 ## Running Locally
 
-### Step 1: Start MCP servers with Podman Compose
+### Option A: Compose (recommended)
 
-Build and start all three MCP servers as containers:
+This starts OGX + all three MCP servers in containers. No Python virtual environment needed.
 
-```bash
-podman compose up --build
-```
-
-Once the images are built, subsequent starts are faster:
-
-```bash
-podman compose up -d
-```
-
-This starts all three MCP servers in the background, mapped to the expected ports:
-
-| Container | Host Port |
-|-----------|-----------|
-| mcp-patient-records | 8081 |
-| mcp-medical-knowledge | 8082 |
-| mcp-scheduling | 8083 |
-
-To stop them:
-
-```bash
-podman compose down
-```
-
-### Step 2: Start Ollama (if not already running)
+**Step 1: Start Ollama** (if not already running)
 
 ```bash
 ollama serve
 ```
 
-### Step 3: Start OGX
+**Step 2: Start the stack**
 
 ```bash
-ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
+podman compose up --build
 ```
 
-OGX connects to the MCP servers on `localhost:8081-8083` and to Ollama on `localhost:11434`.
+Once images are built, subsequent starts are faster:
 
-### Step 4: Start the Chat UI (once built)
+```bash
+podman compose up -d
+```
+
+This starts the OGX server and all three MCP servers:
+
+| Container | Host Port | Internal Port |
+|-----------|-----------|---------------|
+| ogx-server | 8321 | 8321 |
+| mcp-patient-records | 8081 | 8080 |
+| mcp-medical-knowledge | 8082 | 8080 |
+| mcp-scheduling | 8083 | 8080 |
+
+OGX reaches Ollama on the host via `host.docker.internal:11434` and the MCP servers via compose service names.
+
+**Step 3: Start the Chat UI** (once built)
 
 ```bash
 cd triage-assistant && quarkus dev
@@ -202,14 +191,40 @@ cd triage-assistant && quarkus dev
 
 Open `http://localhost:8080` and interact with the triage assistant.
 
-### Alternative: Quarkus Dev Mode (without containers)
+To stop the stack:
 
-For rapid iteration on MCP server code, run them directly with `quarkus dev` instead of Podman:
+```bash
+podman compose down
+```
+
+### Option B: OGX in a Python Virtual Environment
+
+If you need to run OGX outside of compose (e.g. for debugging OGX itself), create an isolated Python environment:
+
+```bash
+cd ogx_configs/
+uv venv .venv --python 3.12
+uv pip install ogx ollama --python .venv/bin/python
+```
+
+Then start OGX directly:
+
+```bash
+ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
+```
+
+In this mode, MCP servers must be running on the host at `localhost:8081-8083` (either via compose or via `quarkus dev`).
+
+### Option C: Quarkus Dev Mode (no containers)
+
+For rapid iteration on MCP server code, run everything directly on the host:
 
 ```
 Terminal 1: cd mcp-patient-records && quarkus dev -Dquarkus.http.port=8081
 Terminal 2: cd mcp-medical-knowledge && quarkus dev -Dquarkus.http.port=8082
 Terminal 3: cd mcp-scheduling && quarkus dev -Dquarkus.http.port=8083
+Terminal 4: ogx_configs/.venv/bin/ogx run ogx_configs/local-dev.yaml
+Terminal 5: cd triage-assistant && quarkus dev
 ```
 
 ## Port Assignments

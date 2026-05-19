@@ -13,7 +13,7 @@ providers:
     - provider_id: local-ollama
       provider_type: remote::ollama
       config:
-        url: ${env.OLLAMA_URL:=http://localhost:11434}
+        base_url: ${env.OLLAMA_URL:=http://localhost:11434}/v1
   files:
     - provider_id: local-files
       provider_type: inline::localfs
@@ -39,6 +39,9 @@ providers:
       provider_type: inline::builtin
       config:
         persistence:
+          agent_state:
+            namespace: agents
+            backend: kv_default
           responses:
             table_name: responses
             backend: sql_default
@@ -47,7 +50,7 @@ registered_resources:
   models:
     - model_id: triage-model
       provider_id: local-ollama
-      provider_model_id: ${env.OLLAMA_MODEL:=granite3.3:8b}
+      provider_model_id: ${env.OLLAMA_MODEL:=qwen3.5:9b}
       model_type: llm
       metadata:
         _unprefixed_alias: true
@@ -55,13 +58,13 @@ registered_resources:
 connectors:
   - connector_id: "mcp::patient-records"
     connector_type: mcp
-    url: "http://localhost:8081/mcp"
+    url: "${env.MCP_PATIENT_RECORDS_URL:=http://localhost:8081/mcp}"
   - connector_id: "mcp::medical-knowledge"
     connector_type: mcp
-    url: "http://localhost:8082/mcp"
+    url: "${env.MCP_MEDICAL_KNOWLEDGE_URL:=http://localhost:8082/mcp}"
   - connector_id: "mcp::scheduling"
     connector_type: mcp
-    url: "http://localhost:8083/mcp"
+    url: "${env.MCP_SCHEDULING_URL:=http://localhost:8083/mcp}"
 
 server:
   port: 8321
