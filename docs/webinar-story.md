@@ -86,21 +86,21 @@ oc get llamastackdistribution -n triage-assistant
 # triage-llamastack     True
 ```
 
-**Show the CR content (highlight BOTH routing and connectors):**
+**Show the ConfigMap content (highlight BOTH inference provider and connectors):**
 
-> "Two things to notice. First, the routing table: `triage-model` is mapped to `granite-fast` -- our small model. Second -- and this is new if you've only seen Llama Stack as a gateway -- the **connectors** section. Three MCP servers are registered here: patient records, medical knowledge, and scheduling. Llama Stack will discover their tools and execute them server-side during the agentic loop."
+> "Two things to notice. First, the inference provider: `remote::vllm` pointing at our Mistral Small 3.1 24B InferenceService. Second -- and this is new if you've only seen Llama Stack as a gateway -- the **connectors** section. Three MCP servers are registered here: patient records, medical knowledge, and scheduling. Llama Stack will discover their tools and execute them server-side during the agentic loop."
 
-> "The application doesn't know about any of this. It just calls `/v1/responses` with `model: triage-model` and a list of connector IDs. Llama Stack handles everything else."
+> "The application doesn't know about any of this. It just calls `/v1/responses` with the model name and a list of connector IDs. Llama Stack handles everything else."
 
 **Quick test:**
 ```bash
-curl -s https://llamastack-triage.apps.cluster.example.com/v1/models | jq '.data[].id'
-# "triage-model"
-# "granite-3.3-8b"
-# "qwen-2.5-32b"
+oc run curl-test -n triage-assistant --rm -it --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
+  curl -s http://triage-llamastack-service:8321/v1/models
+# {"data":[{"id":"mistral-vllm/mistral-small-3-1-24b",...}]}
 ```
 
-> "Three model names visible through one endpoint. And behind the scenes, three MCP servers registered and ready."
+> "Mistral Small 3.1 24B accessible through Llama Stack. And behind the scenes, three MCP servers registered and ready."
 
 ---
 
@@ -179,33 +179,31 @@ curl -s https://llamastack-triage.apps.cluster.example.com/v1/models | jq '.data
 
 ---
 
-## Act 4: The Model-Agnostic Story (7 min)
-
-> **Note:** The model switch demo is optional depending on cluster GPU capacity. With a single GPU, models must be swapped (scale down one, deploy the other). The narrative below can be presented as a conceptual demo or live if time/resources permit.
+## Act 4: The Model-Agnostic Story (5 min)
 
 ### Set the Scene (2 min)
 
-> "Everything you just saw was running on Mistral Small 3.1 24B -- a model from Mistral AI, served via Red Hat's validated catalog. But here's the key point about this architecture: the application doesn't know or care which model is behind the `triage-model` alias."
+> "Everything you just saw was running on Mistral Small 3.1 24B -- a model from Mistral AI, served via Red Hat's validated ModelCar catalog. But here's the key point about this architecture: the application doesn't know or care which model is behind Llama Stack."
 
-> "In most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. In Llama Stack, you change the provider mapping in the routing table. The application never changes."
+> "In most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. In Llama Stack, you change the inference provider in the ConfigMap. The application never changes."
 
-### Explain the Switch (2 min)
+### Explain the Architecture (3 min)
 
 **[SWITCH TO: Terminal or slides]**
 
-**Show the Llama Stack config:**
+**Show the Llama Stack ConfigMap:**
 ```yaml
-models:
-  - model_id: triage-model          # Logical alias -- app uses this
-    provider_id: mistral-24b         # Change this to swap models
-    provider_model_id: mistral-small-3-1-24b
+providers:
+  inference:
+    - provider_id: mistral-vllm
+      provider_type: remote::vllm
+      config:
+        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
 ```
 
-> "To switch to a different model -- say Granite 3.1 8B for cost optimization, or a larger model for better reasoning -- you update this one line. The application keeps calling `triage-model`. Zero code changes. Zero redeployments."
+> "To switch to a different model -- say Granite for IBM alignment, or Qwen for multilingual support -- you deploy a new InferenceService, update this URL in the ConfigMap, and restart Llama Stack. The application keeps calling the same endpoint. Zero code changes. Zero redeployments."
 
-> "On our cluster we have one GPU, so we run one model at a time. But the architecture supports multiple models on larger clusters. The platform team controls which model serves which alias -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
-
-### Key Takeaway (3 min)
+> "On our cluster we have one GPU, so we run one model at a time. But the architecture supports multiple models on larger clusters. Llama Stack can route to multiple inference providers. The platform team controls which model serves the application -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
 
 > "This is what model-agnostic middleware gives you: zero vendor lock-in. Today it's Mistral. Tomorrow it could be Granite, Qwen, Llama, or whatever the next state-of-the-art model is. The application is decoupled from the model layer entirely."
 
@@ -221,7 +219,7 @@ models:
 
 | What changes | Who does it | How | App impact |
 |-------------|-------------|-----|------------|
-| Swap AI model | Platform team | Update `LlamaStackDistribution` CR | None |
+| Swap AI model | Platform team | Update Llama Stack ConfigMap + restart | None |
 | Add new tool (e.g., lab results MCP) | Platform team | Add connector in Llama Stack config | None (or add connector ID to tools list) |
 | Remove tool access | Platform team | Remove connector | None |
 | Change system prompt | App team | Update `application.properties` | Config-only restart |

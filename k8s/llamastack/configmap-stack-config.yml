@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triage-llamastack-config
+  namespace: triage-assistant
+data:
+  config.yaml: |
+    version: '2'
+    image_name: rh-dev
+
+    apis:
+      - responses
+      - inference
+      - vector_io
+      - files
+      - tool_runtime
+
+    providers:
+      inference:
+        - provider_id: mistral-vllm
+          provider_type: remote::vllm
+          config:
+            base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+            max_tokens: 4096
+      files:
+        - provider_id: local-files
+          provider_type: inline::localfs
+          config:
+            storage_dir: /opt/app-root/src/.llama/distributions/rh/files
+            metadata_store:
+              table_name: files_metadata
+              backend: sql_default
+      vector_io:
+        - provider_id: local-vector
+          provider_type: inline::sqlite-vec
+          config:
+            db_path: /opt/app-root/src/.llama/distributions/rh/sqlite_vec.db
+            persistence:
+              namespace: vector_io::sqlite_vec
+              backend: kv_default
+      tool_runtime:
+        - provider_id: file-search
+          provider_type: inline::file-search
+          config: {}
+      responses:
+        - provider_id: builtin
+          provider_type: inline::builtin
+          config:
+            persistence:
+              agent_state:
+                namespace: agents
+                backend: kv_default
+              responses:
+                table_name: responses
+                backend: sql_default
+
+    registered_resources:
+      models:
+        - model_id: triage-model
+          provider_id: mistral-vllm
+          provider_model_id: mistral-small-3-1-24b
+          model_type: llm
+          metadata:
+            _unprefixed_alias: true
+
+    connectors:
+      - connector_id: "mcp::patient-records"
+        connector_type: mcp
+        url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp"
+      - connector_id: "mcp::medical-knowledge"
+        connector_type: mcp
+        url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp"
+      - connector_id: "mcp::scheduling"
+        connector_type: mcp
+        url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
+
+    storage:
+      backends:
+        kv_default:
+          type: kv_sqlite
+          db_path: /opt/app-root/src/.llama/distributions/rh/kvstore.db
+        sql_default:
+          type: sql_sqlite
+          db_path: /opt/app-root/src/.llama/distributions/rh/sql_store.db
+
+    server:
+      port: 8321

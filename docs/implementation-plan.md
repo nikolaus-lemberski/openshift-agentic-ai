@@ -8,7 +8,7 @@
 | 1 | MCP Servers (self-contained mocks) | 1-2 days | None |
 | 2 | Quarkus Chat UI (thin client to Llama Stack) | 0.5-1 day | None (can develop with mock responses) |
 | 3 | OpenShift AI model serving | 0.5 day | GPU-enabled OpenShift cluster |
-| 4 | Llama Stack OGX via Operator (with MCP connectors) | 0.5-1 day | Phase 1, Phase 3 |
+| 4 | Llama Stack OGX via Operator (with MCP connectors) | 0.5 day | Phase 3 |
 | 5 | Integration and demo rehearsal | 1 day | All above |
 
 Total estimated effort: **4-6 days**
@@ -291,7 +291,7 @@ The UI should display:
 quarkus.rest-client.llamastack.url=${LLAMA_STACK_URL:http://localhost:8321}
 
 # Triage configuration
-triage.model=${MODEL_NAME:triage-model}
+triage.model=${MODEL_NAME:mistral-vllm/mistral-small-3-1-24b}
 triage.system-prompt=You are a clinical triage assistant for hospital nurses. \
   You help nurses during patient intake by looking up patient records, \
   assessing symptom urgency, checking drug interactions, and scheduling \
@@ -338,15 +338,7 @@ Model details:
 - **Startup:** `--enforce-eager` to skip CUDA graph compilation (fast startup)
 - **Access:** Internal only (no Route, `serving.kserve.io/disableRouteCreation: "true"`)
 
-### 3.3 Model Switch (optional, TBD)
-
-If a model switch demo is desired later, a second model can be deployed using the same pattern with a different ModelCar OCI image. Candidates from the Red Hat validated catalog that fit on L4:
-- Granite 3.1 8B (FP16): `registry.redhat.io/rhelai1/modelcar-granite-3-1-8b-instruct:1.5`
-- Qwen3 8B (FP8): `registry.redhat.io/rhelai1/modelcar-qwen3-8b-fp8-dynamic:1.5`
-
-Since there is only one GPU, models must be swapped (scale down one, deploy the other).
-
-### 3.4 Verify
+### 3.3 Verify
 
 ```bash
 # Deploy
@@ -366,7 +358,7 @@ Llama Stack manages both model routing AND MCP tool connectors on OpenShift.
 
 ### 4.1 Activate the Operator
 
-Enable Llama Stack Operator on the `DataScienceCluster` CR:
+The Llama Stack Operator is enabled on the `DataScienceCluster` CR (already `Managed` on OpenShift AI 3.4):
 ```yaml
 spec:
   components:
@@ -376,54 +368,45 @@ spec:
 
 ### 4.2 Create LlamaStackDistribution (with Connectors)
 
-Create `k8s/llamastack/llamastack-distribution.yaml`:
+Manifests in `k8s/llamastack/`:
+- `namespace.yml` -- creates `triage-assistant` namespace
+- `configmap-stack-config.yml` -- ConfigMap with the OGX stack configuration (inference provider, MCP connectors, storage)
+- `llamastack-distribution.yml` -- `LlamaStackDistribution` CR using the `rh-dev` distribution with `userConfig` referencing the ConfigMap
 
-```yaml
-apiVersion: llamastack.io/v1alpha1
-kind: LlamaStackDistribution
-metadata:
-  name: triage-llamastack
-  namespace: triage-assistant
-spec:
-  # Inference providers pointing to both vLLM instances
-  # Routing table with logical alias 'triage-model' -> granite-fast (initially)
-  # Both Granite (IBM/Red Hat) and Qwen (Alibaba) as providers -- proves model-agnostic
-  # MCP connectors for all three hospital system MCP servers
-```
+The OGX stack configuration uses `remote::vllm` as the inference provider pointing at the Mistral Small 3.1 24B InferenceService, and registers MCP connectors for all three MCP servers (using k8s service names within the `triage-assistant` namespace).
 
-The OGX configuration for production is maintained in `ogx_configs/openshift-prod.yaml`. The `LlamaStackDistribution` CR on OpenShift uses the equivalent configuration with `remote::openai` providers pointing at the vLLM instances and MCP connectors pointing at k8s service names.
+Key details:
+- **Distribution:** `rh-dev` (Red Hat's Llama Stack distribution image)
+- **Inference provider:** `remote::vllm` at `http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1`
+- **Model name:** The vLLM provider auto-registers the model as `mistral-vllm/mistral-small-3-1-24b` (provider-prefixed). The Quarkus app uses this as the model name.
+- **MCP connectors:** `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` pointing at k8s service URLs in the `triage-assistant` namespace
+- **Storage:** 5Gi PVC with SQLite for registry and response persistence
+- **Network:** Internal ClusterIP service on port 8321
 
-The exact CR schema depends on the OpenShift AI version. Refer to:
-- [RHOAI 3.4 Llama Stack docs](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html/working_with_llama_stack/)
-- The upstream [OGX docs](https://ogx-ai.github.io/docs)
-- The [OGX tools / MCP documentation](https://ogx-ai.github.io/docs/building_applications/tools)
+The reference OGX config is also maintained in `ogx_configs/openshift-prod.yaml`.
 
-### 4.3 Prepare the Model Switch CR
-
-Create `k8s/llamastack/llamastack-distribution-upgraded.yaml`:
-- Same as above, but `triage-model` alias is mapped to `qwen-2.5-32b`
-- During the demo, `oc apply -f` this file to switch from Granite (IBM) to Qwen (Alibaba)
-
-### 4.4 Verify
+### 4.3 Verify
 
 ```bash
-# List models visible through Llama Stack
-curl -s https://llamastack-triage.apps.cluster.example.com/v1/models | jq .
+# Check the LlamaStackDistribution is ready
+oc get llsd -n triage-assistant
+# NAME                PHASE   OPERATOR VERSION   SERVER VERSION
+# triage-llamastack   Ready   "0.4.0"            0.7.1+rhaiv.1
+
+# List models visible through Llama Stack (from within the cluster)
+oc run curl-test -n triage-assistant --rm -it --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
+  curl -s http://triage-llamastack-service:8321/v1/models
 
 # Test inference (basic, no tools)
-curl -s https://llamastack-triage.apps.cluster.example.com/v1/chat/completions \
+oc run curl-chat -n triage-assistant --rm -it --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
+  curl -s http://triage-llamastack-service:8321/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "triage-model", "messages": [{"role": "user", "content": "Hello"}]}'
-
-# Test /v1/responses with MCP tools (the full agentic loop)
-curl -s https://llamastack-triage.apps.cluster.example.com/v1/responses \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "triage-model",
-    "input": "Search for patient Maria Garcia, born 1978-03-15",
-    "tools": [{"type": "mcp", "connector_id": "mcp::patient-records"}]
-  }'
+  -d '{"model": "mistral-vllm/mistral-small-3-1-24b", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
+
+**Acceptance:** Llama Stack is `Ready`, lists the model, and returns inference results routed through vLLM.
 
 ---
 
@@ -442,7 +425,6 @@ Run through the full Maria Garcia scenario on the deployed system:
 1. Patient lookup (Llama Stack calls Patient Records MCP)
 2. Symptom triage (Llama Stack calls Medical Knowledge MCP)
 3. Appointment booking (Llama Stack calls Scheduling MCP)
-4. Model switch (apply upgraded CR, re-run triage)
 
 ### 5.3 Prepare Demo Fallbacks
 
@@ -480,7 +462,7 @@ Or run `./dev-start.sh` from the project root.
 
 OGX configuration files live in `ogx_configs/`:
 - `ogx_configs/local-dev.yaml` -- Ollama provider + localhost MCP servers
-- `ogx_configs/openshift-prod.yaml` -- vLLM providers + k8s service MCP servers
+- `ogx_configs/openshift-prod.yaml` -- vLLM provider + k8s service MCP servers
 
 Open `http://localhost:8080` and interact with the triage assistant.
 

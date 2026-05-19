@@ -14,7 +14,6 @@ public class TriageEngine {
 
     private static final Pattern GESTATIONAL_WEEKS = Pattern.compile("(\\d+)\\s*weeks?", Pattern.CASE_INSENSITIVE);
 
-    @SuppressWarnings("unused")
     public TriageResult assess(List<String> symptoms, int patientAge, List<String> existingConditions) {
         String symptomBlob = joinLower(symptoms);
         String conditionBlob = joinLower(existingConditions);

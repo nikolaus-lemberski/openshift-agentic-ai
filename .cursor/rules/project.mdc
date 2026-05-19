@@ -15,7 +15,7 @@ This is a **demo application** with self-contained mock data. MCP servers use in
 ## Architecture: Llama Stack as Full Middleware
 
 The central architectural decision: **Llama Stack (OGX) is the full AI middleware**, not just a model router. It handles:
-1. **Model routing** -- logical alias `triage-model` mapped to vLLM backends
+1. **Model routing** -- inference routed to vLLM backends via `remote::vllm` provider
 2. **MCP tool execution** -- MCP servers registered as connectors, executed server-side
 3. **Agentic orchestration** -- the full inference -> tool_call -> execute -> re-inference loop runs inside Llama Stack via `/v1/responses`
 
@@ -27,7 +27,7 @@ The Quarkus application is a **thin chat UI**. It calls Llama Stack's `/v1/respo
 |-------|-----------|---------|
 | Chat UI | Quarkus + WebSockets + REST Client | Thin UI, sends requests to Llama Stack `/v1/responses` |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP connectors, server-side agentic loop |
-| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Mistral Small 3.1 24B INT4 via ModelCar) |
+| Model Serving | OpenShift AI 3.4 + vLLM | On-premise LLM hosting (Mistral Small 3.1 24B INT4 via ModelCar) |
 | Agent Tools | 3x Quarkus MCP Servers (Streamable HTTP) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift 4.16+ | Container orchestration |
 
@@ -43,7 +43,7 @@ ogx_configs/                OGX (Llama Stack) config files + Python venv (via uv
   openshift-prod.yaml       OGX config: vLLM + k8s service MCP servers
   .venv/                    Python venv with OGX CLI (gitignored)
 k8s/model-serving/          Namespace, ServingRuntime, InferenceService for vLLM on OpenShift AI
-k8s/llamastack/             LlamaStackDistribution CR (model routing + MCP connectors)
+k8s/llamastack/             Namespace, ConfigMap, LlamaStackDistribution CR (inference + MCP connectors)
 dev-start.sh                Startup script for local development
 docs/                       Architecture, PRD, implementation plan, webinar script, local dev guide
 ```
@@ -56,7 +56,7 @@ docs/                       Architecture, PRD, implementation plan, webinar scri
 
 3. **No LangChain4j in the Quarkus app.** The app uses a plain Quarkus REST Client to call Llama Stack. This keeps the app minimal and avoids framework coupling. LangChain4j is NOT needed when Llama Stack handles orchestration.
 
-4. **Logical model alias.** The Quarkus app references `triage-model` (a logical alias). Llama Stack's routing table maps this alias to a real model. Switching models is a CR update.
+4. **Configurable model name.** The Quarkus app references the model via `MODEL_NAME` env var. On OpenShift, the `remote::vllm` provider auto-registers the model as `mistral-vllm/mistral-small-3-1-24b`. Locally, Ollama uses `triage-model` as a logical alias. Switching models is a ConfigMap + Llama Stack restart.
 
 5. **MCP connectors in Llama Stack config.** MCP servers are registered as connectors in Llama Stack's configuration, not in the Quarkus app. The app references connector IDs (`mcp::patient-records`, etc.) in the `/v1/responses` request.
 
@@ -108,8 +108,8 @@ The primary demo follows Maria Garcia: lookup -> triage (headaches + blurred vis
 - **Alternative:** OGX can be installed in a Python virtual environment at `ogx_configs/.venv/` via `uv` for debugging OGX itself
 - The `ogx_configs/local-dev.yaml` config works in both modes -- MCP URLs are parameterized with env vars (defaulting to localhost)
 - Local dev uses **Ollama** as the inference provider (`remote::ollama`) with `granite3.3:8b` or `qwen3:14b`
-- The logical model alias `triage-model` is the same in local dev and production -- only the OGX config differs
-- The only env var that changes between local and prod for the Quarkus chat UI is `LLAMA_STACK_URL`
+- Locally, the logical model alias `triage-model` is used. On OpenShift, the model is `mistral-vllm/mistral-small-3-1-24b` (auto-registered by the `remote::vllm` provider)
+- Two env vars change between local and prod: `LLAMA_STACK_URL` and `MODEL_NAME`
 - See `docs/local-dev-environment.md` for full setup instructions
 
 ## Coding Conventions
@@ -126,7 +126,7 @@ The primary demo follows Maria Garcia: lookup -> triage (headaches + blurred vis
 
 - The webinar narrative matters. Code should be clean and readable enough to show during a live demo.
 - The Quarkus app is intentionally thin to demonstrate the middleware-first architecture.
-- The model switch demo (optional/TBD): changing the `LlamaStackDistribution` CR to remap `triage-model`.
+- The model-agnostic story: swapping models is a ConfigMap change + Llama Stack restart, no app changes.
 - The tool governance story: MCP connectors managed in Llama Stack, not in the app.
 - Refer to `docs/webinar-story.md` for the full scripted demo flow.
 - Refer to `docs/prd.md` for detailed sample data specifications.

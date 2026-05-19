@@ -1,5 +1,5 @@
 version: 2
-distro_name: openshift-prod
+image_name: rh-dev
 
 apis:
   - responses
@@ -10,32 +10,29 @@ apis:
 
 providers:
   inference:
-    - provider_id: granite-fast
-      provider_type: remote::openai
+    - provider_id: mistral-vllm
+      provider_type: remote::vllm
       config:
-        url: https://granite-8b.openshift-ai.svc:8080/v1
-    - provider_id: qwen-powerful
-      provider_type: remote::openai
-      config:
-        url: https://qwen-32b.openshift-ai.svc:8080/v1
+        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+        max_tokens: 4096
   files:
-    - provider_id: prod-files
+    - provider_id: local-files
       provider_type: inline::localfs
       config:
-        storage_dir: /data/files
+        storage_dir: /opt/app-root/src/.llama/distributions/rh/files
         metadata_store:
           table_name: files_metadata
           backend: sql_default
   vector_io:
-    - provider_id: prod-vector
+    - provider_id: local-vector
       provider_type: inline::sqlite-vec
       config:
-        db_path: /data/sqlite_vec.db
+        db_path: /opt/app-root/src/.llama/distributions/rh/sqlite_vec.db
         persistence:
           namespace: vector_io::sqlite_vec
           backend: kv_default
   tool_runtime:
-    - provider_id: prod-tool-runtime
+    - provider_id: file-search
       provider_type: inline::file-search
       config: {}
   responses:
@@ -43,6 +40,9 @@ providers:
       provider_type: inline::builtin
       config:
         persistence:
+          agent_state:
+            namespace: agents
+            backend: kv_default
           responses:
             table_name: responses
             backend: sql_default
@@ -50,20 +50,8 @@ providers:
 registered_resources:
   models:
     - model_id: triage-model
-      provider_id: granite-fast
-      provider_model_id: granite-3.3-8b-instruct
-      model_type: llm
-      metadata:
-        _unprefixed_alias: true
-    - model_id: granite-3.3-8b
-      provider_id: granite-fast
-      provider_model_id: granite-3.3-8b-instruct
-      model_type: llm
-      metadata:
-        _unprefixed_alias: true
-    - model_id: qwen-2.5-32b
-      provider_id: qwen-powerful
-      provider_model_id: qwen-2.5-32b-instruct
+      provider_id: mistral-vllm
+      provider_model_id: mistral-small-3-1-24b
       model_type: llm
       metadata:
         _unprefixed_alias: true
@@ -71,13 +59,22 @@ registered_resources:
 connectors:
   - connector_id: "mcp::patient-records"
     connector_type: mcp
-    url: "http://mcp-patient-records:8080/mcp"
+    url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp"
   - connector_id: "mcp::medical-knowledge"
     connector_type: mcp
-    url: "http://mcp-medical-knowledge:8080/mcp"
+    url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp"
   - connector_id: "mcp::scheduling"
     connector_type: mcp
-    url: "http://mcp-scheduling:8080/mcp"
+    url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
+
+storage:
+  backends:
+    kv_default:
+      type: kv_sqlite
+      db_path: /opt/app-root/src/.llama/distributions/rh/kvstore.db
+    sql_default:
+      type: sql_sqlite
+      db_path: /opt/app-root/src/.llama/distributions/rh/sql_store.db
 
 server:
   port: 8321

@@ -29,17 +29,15 @@ graph LR
     end
 
     subgraph prod [OpenShift Production]
-        vLLM1["vLLM Granite 8B"]
-        vLLM2["vLLM Qwen 32B"]
-        OGXProd["Llama Stack OGX\ntriage-llamastack:8321"]
+        vLLM1["vLLM Mistral Small\n3.1 24B (INT4)"]
+        OGXProd["Llama Stack OGX\ntriage-llamastack-service:8321"]
         MCP1P["mcp-patient-records:8080"]
         MCP2P["mcp-medical-knowledge:8080"]
         MCP3P["mcp-scheduling:8080"]
         AppP["Quarkus Chat UI"]
 
-        AppP -->|"LLAMA_STACK_URL\n=triage-llamastack:8321"| OGXProd
-        OGXProd -->|"remote::openai"| vLLM1
-        OGXProd -->|"remote::openai"| vLLM2
+        AppP -->|"LLAMA_STACK_URL\n=triage-llamastack-service:8321"| OGXProd
+        OGXProd -->|"remote::vllm"| vLLM1
         OGXProd --> MCP1P
         OGXProd --> MCP2P
         OGXProd --> MCP3P
@@ -50,11 +48,11 @@ graph LR
 |---|---|---|---|
 | Quarkus Chat UI code | identical | identical | nothing |
 | Quarkus MCP server code | identical | identical | nothing |
-| `LLAMA_STACK_URL` | `http://localhost:8321` | `http://triage-llamastack:8321` | env var only |
-| `MODEL_NAME` | `triage-model` | `triage-model` | nothing (logical alias) |
-| OGX inference provider | `remote::ollama` -> localhost:11434 | `remote::openai` -> vLLM svc URLs | OGX config file |
+| `LLAMA_STACK_URL` | `http://localhost:8321` | `http://triage-llamastack-service:8321` | env var only |
+| `MODEL_NAME` | `triage-model` | `mistral-vllm/mistral-small-3-1-24b` | env var only |
+| OGX inference provider | `remote::ollama` -> localhost:11434 | `remote::vllm` -> vLLM svc URL | OGX config file |
 | OGX MCP connector URLs | `localhost:8081-8083` | k8s service names | OGX config file |
-| OGX model mapping | `triage-model` -> Ollama model | `triage-model` -> Granite/Qwen | OGX config file |
+| OGX model mapping | `triage-model` -> Ollama model | auto-registered by vLLM provider | OGX config file |
 
 ## Prerequisites
 
@@ -95,7 +93,7 @@ For closest parity with the production Granite model:
 ollama pull granite3.3:8b
 ```
 
-The `granite3.3:8b` model from IBM supports function calling and is the closest local equivalent to the production `Granite 3.3 8B Instruct` on vLLM.
+The `granite3.3:8b` model from IBM supports function calling and works well for local development and testing.
 
 Alternatively, `qwen3:14b` has excellent tool calling support and can be used instead by setting the `OLLAMA_MODEL` environment variable before starting OGX:
 
@@ -117,11 +115,11 @@ Two OGX config files live in `ogx_configs/`. See the actual files for the full c
 
 ### `ogx_configs/openshift-prod.yaml` -- OpenShift Production (reference)
 
-- Inference: `remote::openai` pointing at vLLM service URLs
-- MCP connectors: k8s service names (`mcp-patient-records:8080`, etc.)
-- Model aliases: `triage-model` -> `granite-3.3-8b-instruct`, plus `qwen-2.5-32b`
+- Inference: `remote::vllm` pointing at `http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1`
+- MCP connectors: k8s service names (`mcp-patient-records.triage-assistant.svc.cluster.local:8080`, etc.)
+- Model: `mistral-small-3-1-24b` (auto-registered as `mistral-vllm/mistral-small-3-1-24b`)
 
-The diff between the two configs is the **entire "local to prod" story**: swap `remote::ollama` for `remote::openai`, change URLs from localhost to k8s service names. The Quarkus apps are untouched.
+The diff between the two configs is the **entire "local to prod" story**: swap `remote::ollama` for `remote::vllm`, change URLs from localhost to k8s service names. The Quarkus apps are untouched.
 
 ## Step 4: Quarkus App Configuration
 
@@ -242,7 +240,6 @@ Terminal 5: cd triage-assistant && quarkus dev
 
 Moving from local dev to OpenShift requires **zero code changes**:
 
-1. **Quarkus apps**: Set `LLAMA_STACK_URL` env var in the OpenShift Deployment to point at the Llama Stack service instead of localhost
-2. **OGX config**: The `LlamaStackDistribution` CR on OpenShift uses the equivalent of `ogx_configs/openshift-prod.yaml` -- different inference providers (vLLM instead of Ollama) and different MCP connector URLs (k8s service names instead of localhost)
-3. **Model name**: Stays `triage-model` everywhere -- it is a logical alias resolved by OGX's routing table
-4. **MCP connector IDs**: Stay `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` everywhere -- only the backing URLs change in OGX config
+1. **Quarkus apps**: Set `LLAMA_STACK_URL` env var to point at the Llama Stack service, and `MODEL_NAME` to `mistral-vllm/mistral-small-3-1-24b`
+2. **OGX config**: The `LlamaStackDistribution` CR on OpenShift uses the equivalent of `ogx_configs/openshift-prod.yaml` -- `remote::vllm` instead of `remote::ollama`, and k8s service URLs instead of localhost
+3. **MCP connector IDs**: Stay `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` everywhere -- only the backing URLs change in OGX config

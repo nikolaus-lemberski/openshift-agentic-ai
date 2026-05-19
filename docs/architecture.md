@@ -56,7 +56,7 @@ graph TD
 | MCP tool discovery | Llama Stack (connectors) |
 | MCP tool execution | Llama Stack (server-side) |
 | Agentic loop (inference -> tool call -> re-inference) | Llama Stack (`/v1/responses`) |
-| Model switching | Platform team (update `LlamaStackDistribution` CR or OGX config) |
+| Model switching | Platform team (update Llama Stack ConfigMap + restart) |
 | Tool switching | Platform team (update connectors in Llama Stack config) |
 | Chat UI + system prompt | Application team (Quarkus app) |
 
@@ -104,29 +104,33 @@ Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can
 
 ```yaml
 version: 2
+image_name: rh-dev
 providers:
   inference:
-    - provider_id: mistral-24b
-      provider_type: remote::openai
+    - provider_id: mistral-vllm
+      provider_type: remote::vllm
       config:
-        url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
 
-models:
-  - model_id: triage-model              # <-- Logical alias used by the Quarkus app
-    provider_id: mistral-24b            # <-- Change this to swap models
-    provider_model_id: mistral-small-3-1-24b
+registered_resources:
+  models:
+    - model_id: triage-model
+      provider_id: mistral-vllm
+      provider_model_id: mistral-small-3-1-24b
 
 connectors:
   - connector_id: "mcp::patient-records"
     connector_type: mcp
-    url: "http://mcp-patient-records:8080/mcp"
+    url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp"
   - connector_id: "mcp::medical-knowledge"
     connector_type: mcp
-    url: "http://mcp-medical-knowledge:8080/mcp"
+    url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp"
   - connector_id: "mcp::scheduling"
     connector_type: mcp
-    url: "http://mcp-scheduling:8080/mcp"
+    url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
 ```
+
+On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `mistral-vllm/mistral-small-3-1-24b` (provider-prefixed).
 
 For local development, `ogx_configs/local-dev.yaml` uses the same structure but with `remote::ollama` as the inference provider and localhost URLs for MCP servers. See [local-dev-environment.md](local-dev-environment.md).
 
@@ -252,28 +256,26 @@ sequenceDiagram
     QuarkusApp-->>Nurse: Structured triage summary
 ```
 
-## Model Switch Flow
+## Model-Agnostic Architecture
 
-The app doesn't touch models OR tools -- both are platform operations.
+The app doesn't touch models OR tools -- both are platform operations. To swap the model behind Llama Stack (e.g., from Mistral to Granite or Qwen), the platform team updates the ConfigMap with a new `remote::vllm` provider URL (pointing at a different InferenceService) and restarts the Llama Stack pod. The Quarkus app is unaffected -- it continues calling Llama Stack's `/v1/responses` endpoint.
 
 ```mermaid
 sequenceDiagram
     participant OpsTeam as Ops Team
     participant OC as oc CLI
-    participant LSOperator as Llama Stack Operator
     participant LSServer as Llama Stack Server
     participant QuarkusApp as Quarkus Chat UI
 
-    Note over OpsTeam: AI committee approves<br/>Qwen 2.5 32B for triage
+    Note over OpsTeam: AI committee approves<br/>a new model for triage
 
-    OpsTeam->>OC: oc apply -f llamastack-distribution.yaml<br/>(triage-model -> qwen-2.5-32b)
-    OC->>LSOperator: Update LlamaStackDistribution CR
-    LSOperator->>LSServer: Reconcile: update routing table
+    OpsTeam->>OC: Update ConfigMap:<br/>change inference provider URL
+    OC->>LSServer: Rollout restart picks up new config
 
     Note over QuarkusApp: No restart needed.<br/>Next request uses new model.
 
-    QuarkusApp->>LSServer: POST /v1/responses<br/>model: triage-model
-    LSServer->>LSServer: Route to qwen-2.5-32b (new mapping)
+    QuarkusApp->>LSServer: POST /v1/responses<br/>model: mistral-vllm/mistral-small-3-1-24b
+    LSServer->>LSServer: Route to configured vLLM backend
 ```
 
 ## Tool Switch Flow

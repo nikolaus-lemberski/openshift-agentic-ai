@@ -1,0 +1,23 @@
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: triage-llamastack
+  namespace: triage-assistant
+spec:
+  replicas: 1
+  server:
+    containerSpec:
+      name: llama-stack
+      port: 8321
+    distribution:
+      name: rh-dev
+    userConfig:
+      configMapName: triage-llamastack-config
+    storage:
+      size: 5Gi
+  network:
+    exposeRoute: true
+    allowedFrom:
+      namespaces:
+        - triage-assistant
+        - triage-model-serving

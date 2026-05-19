@@ -21,7 +21,7 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 
 ### 1.5 Success Criteria
 - A live demo runs through a complete patient triage scenario (lookup, triage, booking) without failure
-- Model switching is demonstrated by changing a Kubernetes CR with zero application changes
+- The model-agnostic architecture is explained: swapping models is a ConfigMap change, not a code change
 - Tool switching is demonstrated by showing that MCP connectors are managed in Llama Stack config, not in the application
 - The audience understands why Llama Stack as full middleware is superior to a thin gateway approach
 
@@ -97,9 +97,9 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 | ID | Requirement | Priority |
 |----|------------|----------|
 | F-40 | The application connects to Llama Stack OGX via the `/v1/responses` endpoint | Must |
-| F-41 | The application uses a logical model alias (e.g., `triage-model`), not a hardcoded model name | Must |
-| F-42 | Changing the model behind the alias requires only a `LlamaStackDistribution` CR update | Must |
-| F-43 | Model switching requires zero application restarts or redeployments | Must |
+| F-41 | The application uses a configurable model name (via env var `MODEL_NAME`) | Must |
+| F-42 | Changing the backing model requires only a ConfigMap update and Llama Stack restart -- no app changes | Must |
+| F-43 | The architecture supports swapping models without application restarts or redeployments | Must |
 | F-44 | A capable model with tool-calling support is deployed on OpenShift AI (Mistral Small 3.1 24B INT4) | Must |
 
 ### 3.6 Tool Management (Llama Stack)
