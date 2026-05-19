@@ -32,7 +32,7 @@
 
 Walk through each layer bottom-up:
 
-1. **OpenShift AI + vLLM** -- "Our models run here. Inside the hospital's data center, on the hospital's GPUs. We have two models from different vendors: IBM Granite for fast routine tasks, and Alibaba's Qwen for deep clinical reasoning. Different vendors, same platform."
+1. **OpenShift AI + vLLM** -- "Our model runs here. Inside the hospital's data center, on the hospital's GPU. We're running Mistral Small 3.1 24B -- a powerful model quantized to 4-bit, served by vLLM via Red Hat's validated ModelCar catalog. It fits on a single NVIDIA L4 GPU and has excellent tool-calling capabilities."
 
 2. **MCP Servers** -- "These are the agent's hands. Three Quarkus microservices exposing hospital systems as MCP tools: patient records, medical knowledge, and appointment scheduling. They speak the Model Context Protocol -- an open standard for tool integration."
 
@@ -50,30 +50,28 @@ Walk through each layer bottom-up:
 
 **[SWITCH TO: OpenShift Console or terminal]**
 
-> "Let's start with the models. I have two models deployed on OpenShift AI, both served by vLLM."
+> "Let's start with the model. I have Mistral Small 3.1 24B deployed on OpenShift AI, served by vLLM. It's a 24-billion parameter model quantized to 4-bit, running on a single NVIDIA L4 GPU."
 
 **Show:**
-1. The OpenShift AI dashboard with two `InferenceService` resources
-2. Or the terminal: `oc get inferenceservices -n openshift-ai`
+1. The OpenShift AI dashboard with the `InferenceService` in the `triage-model-serving` project
+2. Or the terminal: `oc get inferenceservices -n triage-model-serving`
 
 ```
-NAME              READY   URL
-granite-8b        True    https://granite-8b.openshift-ai.svc:8080
-qwen-32b          True    https://qwen-32b.openshift-ai.svc:8080
+NAME                    READY   URL
+mistral-small-3-1-24b   True    http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080
 ```
 
-**Quick test:**
+**Quick test (from a temp pod since it's internal-only):**
 ```bash
-curl -s https://granite-8b.openshift-ai.svc:8080/v1/models | jq '.data[].id'
-# "granite-3.3-8b-instruct"
-
-curl -s https://qwen-32b.openshift-ai.svc:8080/v1/models | jq '.data[].id'
-# "qwen-2.5-32b-instruct"
+oc run curl-test -n triage-model-serving --rm -it --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
+  curl -s http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1/models
+# {"data":[{"id":"mistral-small-3-1-24b",...}]}
 ```
 
-> "Notice: two models from two different vendors -- IBM Granite and Alibaba Qwen. Both running on the same platform, both served by vLLM, both exposed via the same OpenAI-compatible API. That's what open standards give you."
+> "The model is internal-only -- no external Route, accessible only within the cluster. Llama Stack connects to it via the Kubernetes Service URL. Patient data never leaves the cluster."
 
-> "Both models are up, serving OpenAI-compatible endpoints. They're running on GPUs inside the cluster. Patient data stays here."
+> "Notice: we pulled this model from Red Hat's validated ModelCar catalog. No S3, no manual downloads. It's an OCI container image with the model weights baked in. One `oc apply` and it's running."
 
 ### Llama Stack via Operator (5 min)
 
@@ -181,51 +179,35 @@ curl -s https://llamastack-triage.apps.cluster.example.com/v1/models | jq '.data
 
 ---
 
-## Act 4: The Model Switch (7 min)
+## Act 4: The Model-Agnostic Story (7 min)
 
-### Set the Scene (1 min)
+> **Note:** The model switch demo is optional depending on cluster GPU capacity. With a single GPU, models must be swapped (scale down one, deploy the other). The narrative below can be presented as a conceptual demo or live if time/resources permit.
 
-> "Everything you just saw was running on Granite 3.3 8B -- IBM's model, Red Hat's ecosystem. It did a good job with tool calling and basic assessments. But the hospital's AI committee has been benchmarking models, and they found that Alibaba's Qwen 2.5 32B gives significantly better clinical reasoning for triage."
+### Set the Scene (2 min)
 
-> "Now, in most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. It's one command."
+> "Everything you just saw was running on Mistral Small 3.1 24B -- a model from Mistral AI, served via Red Hat's validated catalog. But here's the key point about this architecture: the application doesn't know or care which model is behind the `triage-model` alias."
 
-### Perform the Switch (2 min)
+> "In most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. In Llama Stack, you change the provider mapping in the routing table. The application never changes."
 
-**[SWITCH TO: Terminal]**
+### Explain the Switch (2 min)
 
-**Show the current CR:**
-```bash
-oc get llamastackdistribution triage-llamastack -o yaml | grep -A5 routing
+**[SWITCH TO: Terminal or slides]**
+
+**Show the Llama Stack config:**
+```yaml
+models:
+  - model_id: triage-model          # Logical alias -- app uses this
+    provider_id: mistral-24b         # Change this to swap models
+    provider_model_id: mistral-small-3-1-24b
 ```
-> "See? `triage-model` maps to `granite-fast`."
 
-**Apply the updated CR:**
-```bash
-oc apply -f k8s/llamastack/llamastack-distribution-upgraded.yaml
-```
-> "Done. `triage-model` now maps to `qwen-powerful`. We just switched from an IBM model to an Alibaba model. The application is still running. No restart. No code change. It doesn't even know."
+> "To switch to a different model -- say Granite 3.1 8B for cost optimization, or a larger model for better reasoning -- you update this one line. The application keeps calling `triage-model`. Zero code changes. Zero redeployments."
 
-### Show the Difference (4 min)
+> "On our cluster we have one GPU, so we run one model at a time. But the architecture supports multiple models on larger clusters. The platform team controls which model serves which alias -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
 
-**[SWITCH TO: Browser chat UI -- start a new session]**
+### Key Takeaway (3 min)
 
-**Type the same triage scenario:**
-> `Patient Maria Garcia, DOB 1978-03-15. Complaining of persistent headaches and blurred vision for 2 weeks. BP is 180/110. She has a history of hypertension and is on Lisinopril 20mg. What's your assessment?`
-
-**Wait for response. Compare with the previous answer:**
-
-> "The larger model gives a more nuanced assessment. It mentions specific differential diagnoses. It reasons more deeply about the lisinopril dosage. It suggests specific lab values to check."
-
-**Side-by-side (if using slides):**
-
-| Aspect | Granite 3.3 8B (IBM) | Qwen 2.5 32B (Alibaba) |
-|--------|----------------------|------------------------|
-| Triage level | Correct (ESI 2) | Correct (ESI 2) |
-| Red flags | Lists main symptoms | Adds specific neuro red flags, mentions papilledema risk |
-| Medication reasoning | Mentions lisinopril compliance | Discusses dosage adequacy, considers medication adjustment |
-| Protocol depth | Standard steps | Detailed protocol with conditional branches |
-
-> "Same application. Same endpoint. Same code. Different vendor, different model architecture, better clinical reasoning. The platform team switched model vendors in 30 seconds. That's what model-agnostic middleware gives you -- zero lock-in."
+> "This is what model-agnostic middleware gives you: zero vendor lock-in. Today it's Mistral. Tomorrow it could be Granite, Qwen, Llama, or whatever the next state-of-the-art model is. The application is decoupled from the model layer entirely."
 
 ---
 
@@ -278,16 +260,16 @@ A: Yes. Each request to `/v1/responses` is independent. The Quarkus app manages 
 A: The MCP tools return structured data (triage rules, drug interaction tables), so the agent's recommendations are grounded in tool results, not hallucinated. In production you'd add Llama Stack safety shields and human-in-the-loop validation. The nurse is always the decision-maker.
 
 **Q: What about latency? The agentic loop runs server-side -- is it slower?**
-A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. The small model (Granite 8B) completes a multi-tool interaction in 3-8 seconds. The large model is 8-20 seconds.
+A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. Mistral Small 3.1 24B completes a multi-tool interaction in 5-15 seconds on an L4 GPU.
 
-**Q: Could we use a single model instead of two?**
-A: You could. But the two-model approach optimizes cost: a small 8B model for 80% of interactions (lookups, scheduling), a powerful 32B model for 20% that need clinical reasoning. And as we showed, they don't even have to be from the same vendor. Llama Stack makes the switch transparent.
+**Q: Could we use multiple models?**
+A: Absolutely. On a cluster with more GPUs, you could run a small 8B model for 80% of interactions (lookups, scheduling) and a powerful 32B+ model for clinical reasoning. Llama Stack's routing table handles this transparently. They don't even have to be from the same vendor.
 
 **Q: What if Llama Stack goes down?**
 A: The Operator manages replicas and health checks. In production you'd run multiple Llama Stack instances behind a Kubernetes Service. For the demo, we keep it simple.
 
-**Q: Can I use this with models other than Granite and Llama?**
-A: Yes. Llama Stack OGX supports 50+ providers. Any model with an OpenAI-compatible API (vLLM, TGI, Ollama, cloud providers) can be a provider. The application doesn't change.
+**Q: Can I use this with models other than Mistral?**
+A: Yes. Llama Stack OGX supports 50+ providers. Any model with an OpenAI-compatible API (vLLM, TGI, Ollama, cloud providers) can be a provider. We chose Mistral for its tool-calling quality, but Granite, Qwen, Llama, or any other model works. The application doesn't change.
 
 **Q: How hard is it to connect to a real EHR system?**
 A: The MCP server interface stays the same. Replace the in-memory data store with calls to FHIR/HL7 APIs. The `@Tool` method signatures don't change -- only the implementation.

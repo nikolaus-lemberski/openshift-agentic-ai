@@ -27,7 +27,7 @@ The Quarkus application is a **thin chat UI**. It calls Llama Stack's `/v1/respo
 |-------|-----------|---------|
 | Chat UI | Quarkus + WebSockets + REST Client | Thin UI, sends requests to Llama Stack `/v1/responses` |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP connectors, server-side agentic loop |
-| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Granite 3.3 8B + Qwen 2.5 32B) |
+| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Mistral Small 3.1 24B INT4 via ModelCar) |
 | Agent Tools | 3x Quarkus MCP Servers (Streamable HTTP) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift 4.16+ | Container orchestration |
 
@@ -42,7 +42,7 @@ ogx_configs/                OGX (Llama Stack) config files + Python venv (via uv
   local-dev.yaml            OGX config: Ollama + localhost MCP servers
   openshift-prod.yaml       OGX config: vLLM + k8s service MCP servers
   .venv/                    Python venv with OGX CLI (gitignored)
-k8s/model-serving/          InferenceService CRs for vLLM on OpenShift AI
+k8s/model-serving/          Namespace, ServingRuntime, InferenceService for vLLM on OpenShift AI
 k8s/llamastack/             LlamaStackDistribution CR (model routing + MCP connectors)
 dev-start.sh                Startup script for local development
 docs/                       Architecture, PRD, implementation plan, webinar script, local dev guide
@@ -126,7 +126,7 @@ The primary demo follows Maria Garcia: lookup -> triage (headaches + blurred vis
 
 - The webinar narrative matters. Code should be clean and readable enough to show during a live demo.
 - The Quarkus app is intentionally thin to demonstrate the middleware-first architecture.
-- The model switch demo: changing the `LlamaStackDistribution` CR to remap `triage-model`.
+- The model switch demo (optional/TBD): changing the `LlamaStackDistribution` CR to remap `triage-model`.
 - The tool governance story: MCP connectors managed in Llama Stack, not in the app.
 - Refer to `docs/webinar-story.md` for the full scripted demo flow.
 - Refer to `docs/prd.md` for detailed sample data specifications.

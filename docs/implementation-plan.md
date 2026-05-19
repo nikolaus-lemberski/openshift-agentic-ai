@@ -319,32 +319,43 @@ For local development:
 
 ### 3.1 Prerequisites
 - OpenShift 4.16+ with OpenShift AI 3.x installed
-- GPU nodes available (NVIDIA A10G or A100)
-- A model storage backend (S3-compatible, PVC, or OCI/ModelCar)
+- GPU node available (NVIDIA L4 24GB or better)
+- Pull secret for `registry.redhat.io` configured on the cluster
 
-### 3.2 Deploy Granite 3.3 8B Instruct
+### 3.2 Deploy Mistral Small 3.1 24B Instruct (INT4)
 
-Create `k8s/model-serving/granite-8b-inferenceservice.yaml`:
-- `InferenceService` CR with vLLM runtime
-- Model source: Red Hat model catalog or Hugging Face
-- Resource requests: 1 GPU, ~16GB VRAM
+Manifests in `k8s/model-serving/`:
+- `namespace.yml` -- creates `triage-model-serving` namespace (OpenShift AI Data Science Project)
+- `serving-runtime.yml` -- vLLM NVIDIA GPU ServingRuntime for KServe
+- `inferenceservice.yml` -- InferenceService CR with OCI/ModelCar storage
+- `deploy.sh` -- deployment script that applies resources in order and waits for readiness
 
-### 3.3 Deploy Qwen 2.5 32B Instruct
+Model details:
+- **Source:** Red Hat validated ModelCar: `registry.redhat.io/rhelai1/modelcar-mistral-small-3-1-24b-instruct-2503-quantized-w4a16:1.5`
+- **Storage:** OCI/ModelCar (no S3/MinIO needed)
+- **GPU:** 1x NVIDIA L4 (24GB VRAM), ~14 GiB model + ~5.5 GiB KV cache
+- **Tool calling:** `--tool-call-parser=mistral` + `tool_chat_template_mistral3.jinja`
+- **Startup:** `--enforce-eager` to skip CUDA graph compilation (fast startup)
+- **Access:** Internal only (no Route, `serving.kserve.io/disableRouteCreation: "true"`)
 
-Create `k8s/model-serving/qwen-32b-inferenceservice.yaml`:
-- `InferenceService` CR with vLLM runtime
-- Model source: Hugging Face (`Qwen/Qwen2.5-32B-Instruct`) or pre-downloaded to S3
-- Resource requests: 1x A100 80GB GPU, or 2x A10G with tensor parallelism
-- Note: Using a different model vendor (Alibaba) than Granite (IBM/Red Hat) to prove Llama Stack is model-agnostic
+### 3.3 Model Switch (optional, TBD)
+
+If a model switch demo is desired later, a second model can be deployed using the same pattern with a different ModelCar OCI image. Candidates from the Red Hat validated catalog that fit on L4:
+- Granite 3.1 8B (FP16): `registry.redhat.io/rhelai1/modelcar-granite-3-1-8b-instruct:1.5`
+- Qwen3 8B (FP8): `registry.redhat.io/rhelai1/modelcar-qwen3-8b-fp8-dynamic:1.5`
+
+Since there is only one GPU, models must be swapped (scale down one, deploy the other).
 
 ### 3.4 Verify
 
 ```bash
-# Granite 8B
-curl -s https://granite-8b-openshift-ai.apps.cluster.example.com/v1/models | jq .
+# Deploy
+./k8s/model-serving/deploy.sh
 
-# Qwen 2.5 32B
-curl -s https://qwen-32b-openshift-ai.apps.cluster.example.com/v1/models | jq .
+# Test from within the cluster
+oc run curl-test -n triage-model-serving --rm -it --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
+  curl -s http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1/models
 ```
 
 ---

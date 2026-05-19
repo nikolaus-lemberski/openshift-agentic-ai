@@ -24,8 +24,7 @@ graph TD
     end
 
     subgraph openShiftAI [OpenShift AI - Model Serving]
-        vLLM1["vLLM Instance 1\nGranite 3.3 8B Instruct\n(fast, tool-calling)"]
-        vLLM2["vLLM Instance 2\nQwen 2.5 32B Instruct\n(clinical reasoning)"]
+        vLLM1["vLLM\nMistral Small 3.1 24B Instruct\n(INT4, tool-calling)"]
     end
 
     subgraph mcpLayer [MCP Servers on OpenShift]
@@ -40,8 +39,7 @@ graph TD
     LSServer --> ResponsesAPI
     ResponsesAPI --> RoutingTable
     RoutingTable --> ModelAlias
-    ModelAlias -->|"When mapped to\ngranite-3.3-8b"| vLLM1
-    ModelAlias -->|"When mapped to\nqwen-2.5-32b"| vLLM2
+    ModelAlias -->|"Routed to"| vLLM1
     ResponsesAPI --> Connectors
     Connectors -->|"MCP: tool execution"| PatientMCP
     Connectors -->|"MCP: tool execution"| MedMCP
@@ -71,21 +69,22 @@ graph TD
 
 ### 1. OpenShift AI + vLLM (Model Serving)
 
-**What:** Two LLM instances deployed as `InferenceService` custom resources, each running vLLM as the serving runtime.
+**What:** An LLM deployed as an `InferenceService` custom resource, running vLLM as the serving runtime with OCI/ModelCar storage.
 
 **Why it must exist:**
 - HIPAA and GDPR mandate that patient data (symptoms, medical history, medication lists) never leaves the hospital's infrastructure
 - Cloud LLM APIs (OpenAI, Anthropic, Google) are not an option for processing PHI (Protected Health Information)
 - vLLM provides OpenAI-compatible endpoints, making it transparent to Llama Stack
 
-**Models:**
+**Model:**
 
 | Model | Role | GPU Footprint |
 |-------|------|---------------|
-| Granite 3.3 8B Instruct | Fast tasks: patient lookup, appointment scheduling, structured tool-calling | ~16 GB VRAM (1x A10G or similar) |
-| Qwen 2.5 32B Instruct | Complex tasks: symptom triage, drug interaction analysis, clinical reasoning | ~64 GB VRAM (1x A100 80GB or 2x A10G) |
+| Mistral Small 3.1 24B Instruct (INT4/W4A16) | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | ~14 GiB VRAM (1x NVIDIA L4 24GB) |
 
-Note: We intentionally use models from **different vendors** (IBM/Red Hat Granite + Alibaba Qwen) to demonstrate that Llama Stack is truly model-agnostic. The name "Llama Stack" does not mean "Llama models only."
+The model is sourced from the Red Hat validated ModelCar catalog (`registry.redhat.io/rhelai1/modelcar-mistral-small-3-1-24b-instruct-2503-quantized-w4a16:1.5`), served internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080`.
+
+Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by changing the `storageUri` in the InferenceService CR and updating the Llama Stack provider config.
 
 ### 2. Llama Stack (OGX) via Operator (Full AI Middleware)
 
@@ -107,25 +106,15 @@ Note: We intentionally use models from **different vendors** (IBM/Red Hat Granit
 version: 2
 providers:
   inference:
-    - provider_id: granite-fast
+    - provider_id: mistral-24b
       provider_type: remote::openai
       config:
-        url: https://granite-8b.openshift-ai.svc:8080/v1
-    - provider_id: qwen-powerful
-      provider_type: remote::openai
-      config:
-        url: https://qwen-32b.openshift-ai.svc:8080/v1
+        url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
 
 models:
   - model_id: triage-model              # <-- Logical alias used by the Quarkus app
-    provider_id: granite-fast            # <-- Change this to swap models
-    provider_model_id: granite-3.3-8b-instruct
-  - model_id: granite-3.3-8b
-    provider_id: granite-fast
-    provider_model_id: granite-3.3-8b-instruct
-  - model_id: qwen-2.5-32b
-    provider_id: qwen-powerful
-    provider_model_id: qwen-2.5-32b-instruct
+    provider_id: mistral-24b            # <-- Change this to swap models
+    provider_model_id: mistral-small-3-1-24b
 
 connectors:
   - connector_id: "mcp::patient-records"
@@ -318,21 +307,20 @@ sequenceDiagram
 │ OpenShift Cluster                                            │
 │                                                              │
 │  ┌─────────────────────────────┐  ┌───────────────────────┐  │
-│  │ Namespace:                   │  │ Namespace:            │  │
-│  │ triage-assistant             │  │ openshift-ai          │  │
-│  │                              │  │                       │  │
-│  │  ┌────────────────────────┐  │  │  ┌─────────────────┐  │  │
-│  │  │ Quarkus Chat UI        │  │  │  │ vLLM: Granite   │  │  │
-│  │  │ (Deployment)           │  │  │  │ (InferenceServ) │  │  │
-│  │  │ Only talks to ──────────┼──┼──│  └─────────────────┘  │  │
-│  │  │ Llama Stack            │  │  │                       │  │
-│  │  └────────────────────────┘  │  │  ┌─────────────────┐  │  │
-│  │          │                    │  │  │ vLLM: Qwen 32B  │  │  │
-│  │          ▼                    │  │  │ (InferenceServ) │  │  │
-│  │  ┌────────────────────────┐  │  │  └─────────────────┘  │  │
-│  │  │ Llama Stack OGX        │  │  │          ▲            │  │
-│  │  │ (LlamaStackDist)       │──┼──┼──────────┘            │  │
-│  │  │                        │  │  └───────────────────────┘  │
+│  │ Namespace:                   │  │ Namespace:              │  │
+│  │ triage-assistant             │  │ triage-model-serving    │  │
+│  │                              │  │                         │  │
+│  │  ┌────────────────────────┐  │  │  ┌───────────────────┐  │  │
+│  │  │ Quarkus Chat UI        │  │  │  │ vLLM: Mistral     │  │  │
+│  │  │ (Deployment)           │  │  │  │ Small 3.1 24B     │  │  │
+│  │  │ Only talks to ──────────┼──┼──│  │ (InferenceServ)   │  │  │
+│  │  │ Llama Stack            │  │  │  └───────────────────┘  │  │
+│  │  └────────────────────────┘  │  │          ▲              │  │
+│  │          │                    │  └──────────┼──────────────┘  │
+│  │          ▼                    │             │                  │
+│  │  ┌────────────────────────┐  │             │                  │
+│  │  │ Llama Stack OGX        │  │             │                  │
+│  │  │ (LlamaStackDist)       │──┼─────────────┘                  │
 │  │  │ Connects to MCP ───────┼──┤                             │
 │  │  │ servers via connectors │  │                             │
 │  │  └────────────────────────┘  │                             │
