@@ -43,5 +43,5 @@ spec:
         - --enforce-eager
         - --language-model-only
         - --enable-auto-tool-choice
-        - --tool-call-parser=hermes
+        - --tool-call-parser=qwen3_xml
         - --default-chat-template-kwargs={"enable_thinking":false}
