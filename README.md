@@ -1,6 +1,7 @@
 # Agentic AI in regulated environments: with OGX (Llama Stack), Quarkus, and OpenShift AI
 
-# Agentic AI in regulierten Umgebungen: mit OGX (Llama Stack), Quarkus und OpenShift AI
+RHPDS: https://catalog.demo.redhat.com/catalog/all?search=OpenShift+AI+3&item=babylon-catalog-prod%2Fpublished.openshift-ai-v3.prod
+Campaign ID: 701Pe00000tj4MLIAY
 
 ## Abstract
 
@@ -10,7 +11,13 @@ This webinar presents an open-source stack for running agentic AI on-prem: **Ope
 
 Target audience: Developer, AI engineers, Platform engineers
 
-## Zusammenfassung
+## German
+
+### Title
+
+Agentic AI in regulierten Umgebungen: mit OGX (Llama Stack), Quarkus und OpenShift AI
+
+### Abstract
 
 Gesundheitswesen, Finanzbranche, öffentliche Hand - oder jede Organisation, die ihre Daten selbst kontrollieren und nicht von externen Modellanbietern abhängig sein will - diese Umgebungen brauchen KI-Agenten, die vollständig On-Premise laufen, mit zentral verwalteten Modellen und Werkzeugen sowie sicherem Zugriff auf interne Systeme.
 
