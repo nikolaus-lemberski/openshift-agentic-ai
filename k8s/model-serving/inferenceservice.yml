@@ -43,4 +43,4 @@ spec:
         - --language-model-only
         - --enable-auto-tool-choice
         - --tool-call-parser=hermes
-        - --chat-template-kwargs={"enable_thinking":false}
+        - --default-chat-template-kwargs={"enable_thinking":false}
