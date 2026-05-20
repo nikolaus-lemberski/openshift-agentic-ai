@@ -11,7 +11,7 @@ echo ""
 
 # 1. Create namespace (shared with Llama Stack and apps)
 echo "[1/4] Creating namespace '${NAMESPACE}'..."
-oc apply -f "${SCRIPT_DIR}/../llamastack/namespace.yml"
+oc apply -f "${SCRIPT_DIR}/../namespace.yml"
 echo ""
 
 # 2. Deploy ServingRuntime
