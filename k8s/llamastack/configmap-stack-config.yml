@@ -56,7 +56,7 @@ data:
 
     registered_resources:
       models:
-        - model_id: triage-model
+        - model_id: llama-3-3-70b
           provider_id: llama-vllm
           provider_model_id: llama-3-3-70b
           model_type: llm
