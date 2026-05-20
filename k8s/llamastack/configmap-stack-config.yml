@@ -21,7 +21,7 @@ data:
           provider_type: remote::vllm
           config:
             base_url: http://llama-3-3-70b-predictor:8080/v1
-            max_tokens: 4096
+            max_tokens: 2048
       files:
         - provider_id: local-files
           provider_type: inline::localfs
@@ -66,13 +66,13 @@ data:
     connectors:
       - connector_id: "mcp::patient-records"
         connector_type: mcp
-        url: "http://mcp-patient-records:8080/mcp/sse"
+        url: "http://mcp-patient-records:8080/mcp"
       - connector_id: "mcp::medical-knowledge"
         connector_type: mcp
-        url: "http://mcp-medical-knowledge:8080/mcp/sse"
+        url: "http://mcp-medical-knowledge:8080/mcp"
       - connector_id: "mcp::scheduling"
         connector_type: mcp
-        url: "http://mcp-scheduling:8080/mcp/sse"
+        url: "http://mcp-scheduling:8080/mcp"
 
     storage:
       backends:

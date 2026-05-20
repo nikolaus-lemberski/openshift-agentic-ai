@@ -26,6 +26,12 @@ spec:
               value: http://triage-llamastack-service:8321
             - name: MODEL_NAME
               value: llama-vllm/llama-3-3-70b
+            - name: MCP_PATIENT_RECORDS_URL
+              value: http://mcp-patient-records:8080/mcp
+            - name: MCP_MEDICAL_KNOWLEDGE_URL
+              value: http://mcp-medical-knowledge:8080/mcp
+            - name: MCP_SCHEDULING_URL
+              value: http://mcp-scheduling:8080/mcp
           livenessProbe:
             tcpSocket:
               port: 8080

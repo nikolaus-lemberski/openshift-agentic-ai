@@ -5,6 +5,8 @@ metadata:
   namespace: triage-assistant
   labels:
     app: triage-assistant
+  annotations:
+    haproxy.router.openshift.io/timeout: 1h
 spec:
   to:
     kind: Service
