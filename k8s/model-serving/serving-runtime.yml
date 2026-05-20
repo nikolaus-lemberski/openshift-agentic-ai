@@ -1,7 +1,7 @@
 apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
-  name: llama-3-3-70b
+  name: qwen36-27b
   namespace: triage-assistant
   labels:
     opendatahub.io/dashboard: "true"
@@ -10,16 +10,16 @@ metadata:
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
     opendatahub.io/template-name: vllm-cuda-runtime-template
-    openshift.io/display-name: "Llama 3.3 70B Instruct (INT4) - vLLM"
+    openshift.io/display-name: "Qwen 3.6 27B (FP8) - vLLM"
 spec:
   annotations:
     prometheus.io/path: /metrics
     prometheus.io/port: "8080"
   containers:
     - name: kserve-container
-      image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.4
+      image: docker.io/vllm/vllm-openai:latest
       command:
-        - python
+        - python3
         - -m
         - vllm.entrypoints.openai.api_server
       args:
@@ -28,11 +28,27 @@ spec:
         - --served-model-name={{.Name}}
         - --tensor-parallel-size=2
       env:
+        - name: HOME
+          value: /tmp
         - name: HF_HOME
           value: /tmp/hf_home
+        - name: TRITON_CACHE_DIR
+          value: /tmp/triton_cache
+        - name: XDG_CACHE_HOME
+          value: /tmp/cache
+        - name: VLLM_WORKER_MULTIPROC_METHOD
+          value: spawn
       ports:
         - containerPort: 8080
           protocol: TCP
+      volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+  volumes:
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi
   multiModel: false
   supportedModelFormats:
     - autoSelect: true

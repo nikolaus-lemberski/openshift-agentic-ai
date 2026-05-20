@@ -17,11 +17,11 @@ data:
 
     providers:
       inference:
-        - provider_id: llama-vllm
+        - provider_id: qwen-vllm
           provider_type: remote::vllm
           config:
-            base_url: http://llama-3-3-70b-predictor:8080/v1
-            max_tokens: 2048
+            base_url: http://qwen36-27b-predictor:8080/v1
+            max_tokens: 4096
       files:
         - provider_id: local-files
           provider_type: inline::localfs
@@ -56,9 +56,9 @@ data:
 
     registered_resources:
       models:
-        - model_id: llama-3-3-70b
-          provider_id: llama-vllm
-          provider_model_id: llama-3-3-70b
+        - model_id: triage-model
+          provider_id: qwen-vllm
+          provider_model_id: qwen36-27b
           model_type: llm
           metadata:
             _unprefixed_alias: true
