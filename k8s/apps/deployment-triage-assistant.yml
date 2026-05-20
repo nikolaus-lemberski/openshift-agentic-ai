@@ -18,6 +18,7 @@ spec:
       containers:
         - name: triage-assistant
           image: quay.io/nlembers/agentic-ai-webinar-2026-triage-assistant:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               protocol: TCP

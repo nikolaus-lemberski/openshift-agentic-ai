@@ -29,7 +29,7 @@ graph LR
     end
 
     subgraph prod [OpenShift Production]
-        vLLM1["vLLM Mistral Small\n3.1 24B (INT4)"]
+        vLLM1["vLLM Qwen 3.6\n27B (FP8)"]
         OGXProd["Llama Stack OGX\ntriage-llamastack-service:8321"]
         MCP1P["mcp-patient-records:8080"]
         MCP2P["mcp-medical-knowledge:8080"]
@@ -49,7 +49,7 @@ graph LR
 | Quarkus Chat UI code | identical | identical | nothing |
 | Quarkus MCP server code | identical | identical | nothing |
 | `LLAMA_STACK_URL` | `http://localhost:8321` | `http://triage-llamastack-service:8321` | env var only |
-| `MODEL_NAME` | `triage-model` | `mistral-vllm/mistral-small-3-1-24b` | env var only |
+| `MODEL_NAME` | `triage-model` | `qwen-vllm/qwen36-27b` | env var only |
 | OGX inference provider | `remote::ollama` -> localhost:11434 | `remote::vllm` -> vLLM svc URL | OGX config file |
 | OGX MCP connector URLs | `localhost:8081-8083` | k8s service names | OGX config file |
 | OGX model mapping | `triage-model` -> Ollama model | auto-registered by vLLM provider | OGX config file |
@@ -115,9 +115,9 @@ Two OGX config files live in `ogx_configs/`. See the actual files for the full c
 
 ### `ogx_configs/openshift-prod.yaml` -- OpenShift Production (reference)
 
-- Inference: `remote::vllm` pointing at `http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1`
+- Inference: `remote::vllm` pointing at `http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1`
 - MCP connectors: k8s service names (`mcp-patient-records.triage-assistant.svc.cluster.local:8080`, etc.)
-- Model: `mistral-small-3-1-24b` (auto-registered as `mistral-vllm/mistral-small-3-1-24b`)
+- Model: `qwen36-27b` (auto-registered as `qwen-vllm/qwen36-27b`)
 
 The diff between the two configs is the **entire "local to prod" story**: swap `remote::ollama` for `remote::vllm`, change URLs from localhost to k8s service names. The Quarkus apps are untouched.
 
@@ -240,6 +240,6 @@ Terminal 5: cd triage-assistant && quarkus dev
 
 Moving from local dev to OpenShift requires **zero code changes**:
 
-1. **Quarkus apps**: Set `LLAMA_STACK_URL` env var to point at the Llama Stack service, and `MODEL_NAME` to `mistral-vllm/mistral-small-3-1-24b`
+1. **Quarkus apps**: Set `LLAMA_STACK_URL` env var to point at the Llama Stack service, and `MODEL_NAME` to `qwen-vllm/qwen36-27b`
 2. **OGX config**: The `LlamaStackDistribution` CR on OpenShift uses the equivalent of `ogx_configs/openshift-prod.yaml` -- `remote::vllm` instead of `remote::ollama`, and k8s service URLs instead of localhost
 3. **MCP connector IDs**: Stay `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` everywhere -- only the backing URLs change in OGX config

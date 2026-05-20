@@ -100,7 +100,7 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 | F-41 | The application uses a configurable model name (via env var `MODEL_NAME`) | Must |
 | F-42 | Changing the backing model requires only a ConfigMap update and Llama Stack restart -- no app changes | Must |
 | F-43 | The architecture supports swapping models without application restarts or redeployments | Must |
-| F-44 | A capable model with tool-calling support is deployed on OpenShift AI (Mistral Small 3.1 24B INT4) | Must |
+| F-44 | A capable model with tool-calling support is deployed on OpenShift AI (Qwen 3.6 27B FP8) | Must |
 
 ### 3.6 Tool Management (Llama Stack)
 
@@ -192,7 +192,7 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 | Llama Stack API | `/v1/responses` for server-side agentic orchestration |
 | Model API | OpenAI-compatible (`/v1/chat/completions`, `/v1/models`) between Llama Stack and vLLM |
 | Container runtime | Podman or Docker |
-| GPU requirement | 1x NVIDIA L4 (24GB) for Mistral Small 3.1 24B INT4 |
+| GPU requirement | 4x NVIDIA GPUs for Qwen 3.6 27B FP8 (tensor-parallel-size=4) |
 | OpenShift version | 4.16+ with OpenShift AI 3.x |
 
 ---

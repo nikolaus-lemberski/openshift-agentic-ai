@@ -4,8 +4,8 @@ Deploy vLLM model serving with S3/MinIO storage on OpenShift AI. The model is in
 
 ## Hardware
 
-- 2x NVIDIA L4 GPUs (24GB VRAM each) on g6.12xlarge
-- Model: **Qwen 3.6 27B (FP8)** with tensor-parallel-size=2
+- 4x NVIDIA GPUs on g6.12xlarge
+- Model: **Qwen 3.6 27B (FP8)** with tensor-parallel-size=4
 - Dense 27.8B parameter model, hybrid attention (64 layers)
 
 ## Prerequisites
@@ -78,8 +78,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 | VRAM usage | ~14.5GB weights per GPU + KV cache |
 | Context window | 32768 tokens (native supports up to 262K) |
 | Tool calling | `--tool-call-parser=hermes` + `--enable-auto-tool-choice` |
-| Tensor parallelism | 2 (across 2x L4 GPUs) |
-| Eager mode | `--enforce-eager` (skips CUDA graph compilation) |
+| Tensor parallelism | 4 (across 4 GPUs) |
 | Storage | MinIO S3: `s3://models/qwen3.6-27b-fp8` |
 | Namespace | `triage-assistant` |
 | Internal URL | `http://qwen36-27b-predictor:8080` |
@@ -87,8 +86,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 ## Notes
 
 - **S3/MinIO storage** -- model weights are served from a MinIO bucket within the cluster.
-- **Tensor parallel** -- the model is split across 2 GPUs; the serving runtime sets `--tensor-parallel-size=2`.
+- **Tensor parallel** -- the model is split across 4 GPUs; the serving runtime sets `--tensor-parallel-size=4`.
 - **Single namespace** -- all components (MinIO, model serving, Llama Stack, MCP servers, chat UI) live in `triage-assistant`.
 - **Internal only** -- `serving.kserve.io/disableRouteCreation: "true"` prevents external Route creation.
 - **No auth needed** -- traffic stays within the cluster network.
-- **2 of 4 GPUs used** -- leaves 2 L4 GPUs available for other workloads.

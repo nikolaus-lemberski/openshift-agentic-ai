@@ -32,7 +32,7 @@
 
 Walk through each layer bottom-up:
 
-1. **OpenShift AI + vLLM** -- "Our model runs here. Inside the hospital's data center, on the hospital's GPU. We're running Mistral Small 3.1 24B -- a powerful model quantized to 4-bit, served by vLLM via Red Hat's validated ModelCar catalog. It fits on a single NVIDIA L4 GPU and has excellent tool-calling capabilities."
+1. **OpenShift AI + vLLM** -- "Our model runs here. Inside the hospital's data center, on the hospital's GPUs. We're running Qwen 3.6 27B -- a powerful dense model in FP8 precision, served by vLLM with tensor parallelism across 4 GPUs. It has excellent tool-calling capabilities."
 
 2. **MCP Servers** -- "These are the agent's hands. Three Quarkus microservices exposing hospital systems as MCP tools: patient records, medical knowledge, and appointment scheduling. They speak the Model Context Protocol -- an open standard for tool integration."
 
@@ -50,28 +50,28 @@ Walk through each layer bottom-up:
 
 **[SWITCH TO: OpenShift Console or terminal]**
 
-> "Let's start with the model. I have Mistral Small 3.1 24B deployed on OpenShift AI, served by vLLM. It's a 24-billion parameter model quantized to 4-bit, running on a single NVIDIA L4 GPU."
+> "Let's start with the model. I have Qwen 3.6 27B deployed on OpenShift AI, served by vLLM. It's a 27-billion parameter dense model in FP8 precision, running across 4 GPUs with tensor parallelism."
 
 **Show:**
-1. The OpenShift AI dashboard with the `InferenceService` in the `triage-model-serving` project
-2. Or the terminal: `oc get inferenceservices -n triage-model-serving`
+1. The OpenShift AI dashboard with the `InferenceService` in the `triage-assistant` project
+2. Or the terminal: `oc get inferenceservices -n triage-assistant`
 
 ```
-NAME                    READY   URL
-mistral-small-3-1-24b   True    http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080
+NAME          READY   URL
+qwen36-27b    True    http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080
 ```
 
 **Quick test (from a temp pod since it's internal-only):**
 ```bash
-oc run curl-test -n triage-model-serving --rm -it --restart=Never \
+oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1/models
-# {"data":[{"id":"mistral-small-3-1-24b",...}]}
+  curl -s http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1/models
+# {"data":[{"id":"qwen36-27b",...}]}
 ```
 
 > "The model is internal-only -- no external Route, accessible only within the cluster. Llama Stack connects to it via the Kubernetes Service URL. Patient data never leaves the cluster."
 
-> "Notice: we pulled this model from Red Hat's validated ModelCar catalog. No S3, no manual downloads. It's an OCI container image with the model weights baked in. One `oc apply` and it's running."
+> "The model weights are stored in a MinIO S3 bucket within the cluster. We pulled the Qwen 3.6 27B FP8 weights and uploaded them to MinIO, then the InferenceService pulls from there. Everything stays inside the cluster."
 
 ### Llama Stack via Operator (5 min)
 
@@ -88,7 +88,7 @@ oc get llamastackdistribution -n triage-assistant
 
 **Show the ConfigMap content (highlight BOTH inference provider and connectors):**
 
-> "Two things to notice. First, the inference provider: `remote::vllm` pointing at our Mistral Small 3.1 24B InferenceService. Second -- and this is new if you've only seen Llama Stack as a gateway -- the **connectors** section. Three MCP servers are registered here: patient records, medical knowledge, and scheduling. Llama Stack will discover their tools and execute them server-side during the agentic loop."
+> "Two things to notice. First, the inference provider: `remote::vllm` pointing at our Qwen 3.6 27B InferenceService. Second -- and this is new if you've only seen Llama Stack as a gateway -- the **connectors** section. Three MCP servers are registered here: patient records, medical knowledge, and scheduling. Llama Stack will discover their tools and execute them server-side during the agentic loop."
 
 > "The application doesn't know about any of this. It just calls `/v1/responses` with the model name and a list of connector IDs. Llama Stack handles everything else."
 
@@ -97,10 +97,10 @@ oc get llamastackdistribution -n triage-assistant
 oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
   curl -s http://triage-llamastack-service:8321/v1/models
-# {"data":[{"id":"mistral-vllm/mistral-small-3-1-24b",...}]}
+# {"data":[{"id":"qwen-vllm/qwen36-27b",...}]}
 ```
 
-> "Mistral Small 3.1 24B accessible through Llama Stack. And behind the scenes, three MCP servers registered and ready."
+> "Qwen 3.6 27B accessible through Llama Stack. And behind the scenes, three MCP servers registered and ready."
 
 ---
 
@@ -183,7 +183,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 
 ### Set the Scene (2 min)
 
-> "Everything you just saw was running on Mistral Small 3.1 24B -- a model from Mistral AI, served via Red Hat's validated ModelCar catalog. But here's the key point about this architecture: the application doesn't know or care which model is behind Llama Stack."
+> "Everything you just saw was running on Qwen 3.6 27B -- a dense model from the Qwen family, served in FP8 precision via vLLM. But here's the key point about this architecture: the application doesn't know or care which model is behind Llama Stack."
 
 > "In most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. In Llama Stack, you change the inference provider in the ConfigMap. The application never changes."
 
@@ -195,17 +195,17 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 ```yaml
 providers:
   inference:
-    - provider_id: mistral-vllm
+    - provider_id: qwen-vllm
       provider_type: remote::vllm
       config:
-        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+        base_url: http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1
 ```
 
-> "To switch to a different model -- say Granite for IBM alignment, or Qwen for multilingual support -- you deploy a new InferenceService, update this URL in the ConfigMap, and restart Llama Stack. The application keeps calling the same endpoint. Zero code changes. Zero redeployments."
+> "To switch to a different model -- say Granite for IBM alignment, or Llama for Meta's latest -- you deploy a new InferenceService, update this URL in the ConfigMap, and restart Llama Stack. The application keeps calling the same endpoint. Zero code changes. Zero redeployments."
 
-> "On our cluster we have one GPU, so we run one model at a time. But the architecture supports multiple models on larger clusters. Llama Stack can route to multiple inference providers. The platform team controls which model serves the application -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
+> "On our cluster we have 4 GPUs dedicated to model serving. But the architecture supports multiple models on larger clusters. Llama Stack can route to multiple inference providers. The platform team controls which model serves the application -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
 
-> "This is what model-agnostic middleware gives you: zero vendor lock-in. Today it's Mistral. Tomorrow it could be Granite, Qwen, Llama, or whatever the next state-of-the-art model is. The application is decoupled from the model layer entirely."
+> "This is what model-agnostic middleware gives you: zero vendor lock-in. Today it's Qwen. Tomorrow it could be Granite, Llama, Mistral, or whatever the next state-of-the-art model is. The application is decoupled from the model layer entirely."
 
 ---
 
@@ -258,7 +258,7 @@ A: Yes. Each request to `/v1/responses` is independent. The Quarkus app manages 
 A: The MCP tools return structured data (triage rules, drug interaction tables), so the agent's recommendations are grounded in tool results, not hallucinated. In production you'd add Llama Stack safety shields and human-in-the-loop validation. The nurse is always the decision-maker.
 
 **Q: What about latency? The agentic loop runs server-side -- is it slower?**
-A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. Mistral Small 3.1 24B completes a multi-tool interaction in 5-15 seconds on an L4 GPU.
+A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. Qwen 3.6 27B completes a multi-tool interaction in 5-15 seconds with tensor parallelism across 4 GPUs.
 
 **Q: Could we use multiple models?**
 A: Absolutely. On a cluster with more GPUs, you could run a small 8B model for 80% of interactions (lookups, scheduling) and a powerful 32B+ model for clinical reasoning. Llama Stack's routing table handles this transparently. They don't even have to be from the same vendor.
@@ -267,7 +267,7 @@ A: Absolutely. On a cluster with more GPUs, you could run a small 8B model for 8
 A: The Operator manages replicas and health checks. In production you'd run multiple Llama Stack instances behind a Kubernetes Service. For the demo, we keep it simple.
 
 **Q: Can I use this with models other than Mistral?**
-A: Yes. Llama Stack OGX supports 50+ providers. Any model with an OpenAI-compatible API (vLLM, TGI, Ollama, cloud providers) can be a provider. We chose Mistral for its tool-calling quality, but Granite, Qwen, Llama, or any other model works. The application doesn't change.
+A: Yes. Llama Stack OGX supports 50+ providers. Any model with an OpenAI-compatible API (vLLM, TGI, Ollama, cloud providers) can be a provider. We chose Qwen for its tool-calling quality, but Granite, Llama, Mistral, or any other model works. The application doesn't change.
 
 **Q: How hard is it to connect to a real EHR system?**
 A: The MCP server interface stays the same. Replace the in-memory data store with calls to FHIR/HL7 APIs. The `@Tool` method signatures don't change -- only the implementation.

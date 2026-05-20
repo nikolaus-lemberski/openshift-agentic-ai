@@ -24,7 +24,7 @@ graph TD
     end
 
     subgraph openShiftAI [OpenShift AI - Model Serving]
-        vLLM1["vLLM\nMistral Small 3.1 24B Instruct\n(INT4, tool-calling)"]
+        vLLM1["vLLM\nQwen 3.6 27B\n(FP8, tool-calling)"]
     end
 
     subgraph mcpLayer [MCP Servers on OpenShift]
@@ -80,11 +80,11 @@ graph TD
 
 | Model | Role | GPU Footprint |
 |-------|------|---------------|
-| Mistral Small 3.1 24B Instruct (INT4/W4A16) | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | ~14 GiB VRAM (1x NVIDIA L4 24GB) |
+| Qwen 3.6 27B (FP8) | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | ~29 GiB weights across 4 GPUs |
 
-The model is sourced from the Red Hat validated ModelCar catalog (`registry.redhat.io/rhelai1/modelcar-mistral-small-3-1-24b-instruct-2503-quantized-w4a16:1.5`), served internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080`.
+The model weights are served from a MinIO S3 bucket (`s3://models/qwen3.6-27b-fp8`) within the cluster. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080`.
 
-Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by changing the `storageUri` in the InferenceService CR and updating the Llama Stack provider config.
+Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by deploying a new InferenceService and updating the Llama Stack provider config.
 
 ### 2. Llama Stack (OGX) via Operator (Full AI Middleware)
 
@@ -107,16 +107,16 @@ version: 2
 image_name: rh-dev
 providers:
   inference:
-    - provider_id: mistral-vllm
+    - provider_id: qwen-vllm
       provider_type: remote::vllm
       config:
-        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+        base_url: http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1
 
 registered_resources:
   models:
     - model_id: triage-model
-      provider_id: mistral-vllm
-      provider_model_id: mistral-small-3-1-24b
+      provider_id: qwen-vllm
+      provider_model_id: qwen36-27b
 
 connectors:
   - connector_id: "mcp::patient-records"
@@ -130,7 +130,7 @@ connectors:
     url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
 ```
 
-On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `mistral-vllm/mistral-small-3-1-24b` (provider-prefixed).
+On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen36-27b` (provider-prefixed).
 
 For local development, `ogx_configs/local-dev.yaml` uses the same structure but with `remote::ollama` as the inference provider and localhost URLs for MCP servers. See [local-dev-environment.md](local-dev-environment.md).
 
@@ -274,7 +274,7 @@ sequenceDiagram
 
     Note over QuarkusApp: No restart needed.<br/>Next request uses new model.
 
-    QuarkusApp->>LSServer: POST /v1/responses<br/>model: mistral-vllm/mistral-small-3-1-24b
+    QuarkusApp->>LSServer: POST /v1/responses<br/>model: qwen-vllm/qwen36-27b
     LSServer->>LSServer: Route to configured vLLM backend
 ```
 
@@ -308,32 +308,31 @@ sequenceDiagram
 ┌──────────────────────────────────────────────────────────────┐
 │ OpenShift Cluster                                            │
 │                                                              │
-│  ┌─────────────────────────────┐  ┌───────────────────────┐  │
-│  │ Namespace:                   │  │ Namespace:              │  │
-│  │ triage-assistant             │  │ triage-model-serving    │  │
-│  │                              │  │                         │  │
-│  │  ┌────────────────────────┐  │  │  ┌───────────────────┐  │  │
-│  │  │ Quarkus Chat UI        │  │  │  │ vLLM: Mistral     │  │  │
-│  │  │ (Deployment)           │  │  │  │ Small 3.1 24B     │  │  │
-│  │  │ Only talks to ──────────┼──┼──│  │ (InferenceServ)   │  │  │
-│  │  │ Llama Stack            │  │  │  └───────────────────┘  │  │
-│  │  └────────────────────────┘  │  │          ▲              │  │
-│  │          │                    │  └──────────┼──────────────┘  │
-│  │          ▼                    │             │                  │
-│  │  ┌────────────────────────┐  │             │                  │
-│  │  │ Llama Stack OGX        │  │             │                  │
-│  │  │ (LlamaStackDist)       │──┼─────────────┘                  │
-│  │  │ Connects to MCP ───────┼──┤                             │
-│  │  │ servers via connectors │  │                             │
-│  │  └────────────────────────┘  │                             │
-│  │          │                    │                             │
-│  │          ▼                    │                             │
-│  │  ┌────────────────────────┐  │                             │
-│  │  │ MCP: Patient Records   │  │                             │
-│  │  │ MCP: Medical Knowledge │  │                             │
-│  │  │ MCP: Scheduling        │  │                             │
-│  │  └────────────────────────┘  │                             │
-│  └─────────────────────────────┘                              │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ Namespace: triage-assistant                               │  │
+│  │                                                           │  │
+│  │  ┌────────────────────────┐  ┌───────────────────────┐    │  │
+│  │  │ Quarkus Chat UI        │  │ vLLM: Qwen 3.6 27B   │    │  │
+│  │  │ (Deployment)           │  │ (InferenceService)    │    │  │
+│  │  │ Only talks to ─────────┤  └───────────────────────┘    │  │
+│  │  │ Llama Stack            │            ▲                  │  │
+│  │  └────────────────────────┘            │                  │  │
+│  │          │                              │                  │  │
+│  │          ▼                              │                  │  │
+│  │  ┌────────────────────────┐            │                  │  │
+│  │  │ Llama Stack OGX        │────────────┘                  │  │
+│  │  │ (LlamaStackDist)       │                               │  │
+│  │  │ Connects to MCP        │                               │  │
+│  │  │ servers via connectors │                               │  │
+│  │  └────────────────────────┘                               │  │
+│  │          │                                                │  │
+│  │          ▼                                                │  │
+│  │  ┌────────────────────────┐                               │  │
+│  │  │ MCP: Patient Records   │                               │  │
+│  │  │ MCP: Medical Knowledge │                               │  │
+│  │  │ MCP: Scheduling        │                               │  │
+│  │  └────────────────────────┘                               │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
 ```
 

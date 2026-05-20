@@ -44,6 +44,9 @@ public class TriageService {
         return buildChatResponse(result);
     }
 
+    private static final java.util.regex.Pattern THINK_PATTERN =
+            java.util.regex.Pattern.compile("<think>.*?</think>\\s*|<think>.*$|</think>\\s*", java.util.regex.Pattern.DOTALL);
+
     private ChatResponse buildChatResponse(ResponseResult result) {
         var text = new StringBuilder();
         var toolCalls = new java.util.ArrayList<String>();
@@ -72,9 +75,13 @@ public class TriageService {
 
         String finalText = text.isEmpty()
                 ? "I wasn't able to generate a response. Please try again."
-                : text.toString();
+                : stripThinkingBlocks(text.toString());
 
         return new ChatResponse(result.id(), finalText, toolCalls);
+    }
+
+    private String stripThinkingBlocks(String text) {
+        return THINK_PATTERN.matcher(text).replaceAll("").strip();
     }
 
     public record ChatResponse(String responseId, String text, List<String> toolCalls) {

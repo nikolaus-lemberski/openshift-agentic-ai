@@ -291,7 +291,7 @@ The UI should display:
 quarkus.rest-client.llamastack.url=${LLAMA_STACK_URL:http://localhost:8321}
 
 # Triage configuration
-triage.model=${MODEL_NAME:llama-vllm/llama-3-3-70b}
+triage.model=${MODEL_NAME:triage-model}
 triage.system-prompt=You are a clinical triage assistant for hospital nurses. \
   You help nurses during patient intake by looking up patient records, \
   assessing symptom urgency, checking drug interactions, and scheduling \
@@ -322,18 +322,18 @@ For local development:
 - GPU node available (NVIDIA L4 24GB or better)
 - Pull secret for `registry.redhat.io` configured on the cluster
 
-### 3.2 Deploy Llama 3.3 70B Instruct (INT4)
+### 3.2 Deploy Qwen 3.6 27B (FP8)
 
 Manifests in `k8s/model-serving/`:
 - `serving-runtime.yml` -- vLLM NVIDIA GPU ServingRuntime for KServe with tensor parallelism
-- `inferenceservice.yml` -- InferenceService CR with OCI/ModelCar storage
+- `inferenceservice.yml` -- InferenceService CR with S3/MinIO storage
 
 Model details:
-- **Source:** Red Hat validated ModelCar: `registry.redhat.io/rhelai1/modelcar-llama-3-3-70b-instruct-quantized-w4a16:1.5`
-- **Storage:** OCI/ModelCar (no S3/MinIO needed)
-- **GPU:** 2x NVIDIA L4 (23GB VRAM each) with `--tensor-parallel-size=2`, ~35 GiB model weights
-- **Tool calling:** `--tool-call-parser=llama3_json` + `tool_chat_template_llama3.1_json.jinja`
-- **Startup:** `--enforce-eager` to skip CUDA graph compilation (fast startup)
+- **Source:** Qwen 3.6 27B with FP8 quantization
+- **Storage:** S3/MinIO bucket (`s3://models/qwen3.6-27b-fp8`)
+- **GPU:** 4x NVIDIA GPUs with `--tensor-parallel-size=4`
+- **Tool calling:** `--tool-call-parser=hermes` + `--enable-auto-tool-choice`
+- **Context window:** 32768 tokens (`--max-model-len=32768`)
 - **Access:** Internal only (no Route, `serving.kserve.io/disableRouteCreation: "true"`)
 
 ### 3.3 Verify
@@ -347,7 +347,7 @@ oc apply -f k8s/model-serving/inferenceservice.yml
 # Test from within the cluster
 oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://llama-3-3-70b-predictor:8080/v1/models
+  curl -s http://qwen36-27b-predictor:8080/v1/models
 ```
 
 ---
@@ -373,12 +373,12 @@ Manifests in `k8s/llamastack/`:
 - `configmap-stack-config.yml` -- ConfigMap with the OGX stack configuration (inference provider, MCP connectors, storage)
 - `llamastack-distribution.yml` -- `LlamaStackDistribution` CR using the `rh-dev` distribution with `userConfig` referencing the ConfigMap
 
-The OGX stack configuration uses `remote::vllm` as the inference provider pointing at the Llama 3.3 70B InferenceService, and registers MCP connectors for all three MCP servers (using k8s service names within the `triage-assistant` namespace).
+The OGX stack configuration uses `remote::vllm` as the inference provider pointing at the Qwen 3.6 27B InferenceService, and registers MCP connectors for all three MCP servers (using k8s service names within the `triage-assistant` namespace).
 
 Key details:
 - **Distribution:** `rh-dev` (Red Hat's Llama Stack distribution image)
-- **Inference provider:** `remote::vllm` at `http://llama-3-3-70b-predictor.triage-assistant.svc.cluster.local:8080/v1`
-- **Model name:** The vLLM provider auto-registers the model as `llama-vllm/llama-3-3-70b` (provider-prefixed). The Quarkus app uses this as the model name.
+- **Inference provider:** `remote::vllm` at `http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1`
+- **Model name:** The vLLM provider auto-registers the model as `qwen-vllm/qwen36-27b` (provider-prefixed). The Quarkus app uses this as the model name.
 - **MCP connectors:** `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` pointing at k8s service URLs in the `triage-assistant` namespace
 - **Storage:** 5Gi PVC with SQLite for registry and response persistence
 - **Network:** Internal ClusterIP service on port 8321
@@ -403,7 +403,7 @@ oc run curl-chat -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
   curl -s http://triage-llamastack-service:8321/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama-vllm/llama-3-3-70b", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model": "qwen-vllm/qwen36-27b", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
 **Acceptance:** Llama Stack is `Ready`, lists the model, and returns inference results routed through vLLM.

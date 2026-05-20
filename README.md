@@ -57,7 +57,7 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 |-------|-----------|------|
 | Chat UI | Quarkus + WebSockets | Thin UI, delegates all AI to Llama Stack |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP tool execution, agentic loop (`/v1/responses`) |
-| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Mistral Small 3.1 24B INT4 via ModelCar) |
+| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Qwen 3.6 27B FP8 via S3/MinIO) |
 | Agent Tools | MCP Servers (Quarkus) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift | Container orchestration, GPU management |
 
