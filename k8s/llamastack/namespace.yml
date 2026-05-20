@@ -6,4 +6,4 @@ metadata:
     opendatahub.io/dashboard: "true"
   annotations:
     openshift.io/display-name: "Triage Assistant"
-    openshift.io/description: "Llama Stack + MCP servers + Chat UI for the Patient Triage Assistant demo"
+    openshift.io/description: "Patient Triage Assistant demo: model serving, Llama Stack, MCP servers, and Chat UI"

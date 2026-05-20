@@ -20,7 +20,7 @@ data:
         - provider_id: mistral-vllm
           provider_type: remote::vllm
           config:
-            base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+            base_url: http://mistral-small-3-1-24b-predictor:8080/v1
             max_tokens: 4096
       files:
         - provider_id: local-files
@@ -66,13 +66,13 @@ data:
     connectors:
       - connector_id: "mcp::patient-records"
         connector_type: mcp
-        url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp/sse"
+        url: "http://mcp-patient-records:8080/mcp/sse"
       - connector_id: "mcp::medical-knowledge"
         connector_type: mcp
-        url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp/sse"
+        url: "http://mcp-medical-knowledge:8080/mcp/sse"
       - connector_id: "mcp::scheduling"
         connector_type: mcp
-        url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp/sse"
+        url: "http://mcp-scheduling:8080/mcp/sse"
 
     storage:
       backends:

@@ -2,40 +2,30 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NAMESPACE="triage-model-serving"
+NAMESPACE="triage-assistant"
 ISVC_NAME="mistral-small-3-1-24b"
 TIMEOUT="${1:-600s}"
 
 echo "=== Phase 3: Model Serving Deployment ==="
 echo ""
 
-# 1. Clean up old namespace if it exists
-if oc get ns my-first-model &>/dev/null; then
-  echo "[1/5] Deleting old 'my-first-model' namespace..."
-  oc delete ns my-first-model --wait=false
-  echo "      Namespace deletion initiated (will complete in background)"
-else
-  echo "[1/5] Namespace 'my-first-model' does not exist, skipping"
-fi
+# 1. Create namespace (shared with Llama Stack and apps)
+echo "[1/4] Creating namespace '${NAMESPACE}'..."
+oc apply -f "${SCRIPT_DIR}/../llamastack/namespace.yml"
 echo ""
 
-# 2. Create namespace
-echo "[2/5] Creating namespace '${NAMESPACE}'..."
-oc apply -f "${SCRIPT_DIR}/namespace.yml"
-echo ""
-
-# 3. Deploy ServingRuntime
-echo "[3/5] Deploying ServingRuntime..."
+# 2. Deploy ServingRuntime
+echo "[2/4] Deploying ServingRuntime..."
 oc apply -f "${SCRIPT_DIR}/serving-runtime.yml"
 echo ""
 
-# 4. Deploy InferenceService
-echo "[4/5] Deploying InferenceService '${ISVC_NAME}'..."
+# 3. Deploy InferenceService
+echo "[3/4] Deploying InferenceService '${ISVC_NAME}'..."
 oc apply -f "${SCRIPT_DIR}/inferenceservice.yml"
 echo ""
 
-# 5. Wait for model to be ready
-echo "[5/5] Waiting for model to be ready (timeout: ${TIMEOUT})..."
+# 4. Wait for model to be ready
+echo "[4/4] Waiting for model to be ready (timeout: ${TIMEOUT})..."
 echo "      (OCI image pull + model loading may take several minutes on first deploy)"
 echo ""
 

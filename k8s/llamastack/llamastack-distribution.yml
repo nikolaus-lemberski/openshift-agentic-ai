@@ -17,7 +17,3 @@ spec:
       size: 5Gi
   network:
     exposeRoute: true
-    allowedFrom:
-      namespaces:
-        - triage-assistant
-        - triage-model-serving

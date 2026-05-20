@@ -2,7 +2,7 @@ apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
   name: mistral-small-3-1-24b
-  namespace: triage-model-serving
+  namespace: triage-assistant
   labels:
     opendatahub.io/dashboard: "true"
   annotations:
