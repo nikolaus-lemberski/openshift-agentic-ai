@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="triage-assistant"
-ISVC_NAME="mistral-small-3-1-24b"
+ISVC_NAME="llama-3-3-70b"
 TIMEOUT="${1:-600s}"
 
 echo "=== Phase 3: Model Serving Deployment ==="
@@ -38,7 +38,7 @@ if oc wait --for=condition=Ready "inferenceservice/${ISVC_NAME}" \
   echo ""
   echo "=== SUCCESS ==="
   echo ""
-  echo "Model:    Mistral Small 3.1 24B Instruct (INT4/W4A16)"
+  echo "Model:    Llama 3.3 70B Instruct (INT4/W4A16)"
   echo "Status:   Ready"
   echo "URL:      ${ISVC_URL}"
   echo ""

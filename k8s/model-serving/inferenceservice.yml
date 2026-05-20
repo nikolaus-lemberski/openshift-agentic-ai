@@ -1,7 +1,7 @@
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
-  name: mistral-small-3-1-24b
+  name: llama-3-3-70b
   namespace: triage-assistant
   labels:
     opendatahub.io/dashboard: "true"
@@ -11,7 +11,7 @@ metadata:
     opendatahub.io/hardware-profile-name: gpu-profile
     opendatahub.io/hardware-profile-namespace: redhat-ods-applications
     opendatahub.io/model-type: generative
-    openshift.io/display-name: "Mistral Small 3.1 24B Instruct (INT4)"
+    openshift.io/display-name: "Llama 3.3 70B Instruct (INT4)"
     security.opendatahub.io/enable-auth: "false"
     serving.kserve.io/deploymentMode: Standard
     serving.kserve.io/disableRouteCreation: "true"
@@ -24,22 +24,22 @@ spec:
       modelFormat:
         name: vLLM
       name: ""
-      runtime: mistral-small-3-1-24b
-      storageUri: oci://registry.redhat.io/rhelai1/modelcar-mistral-small-3-1-24b-instruct-2503-quantized-w4a16:1.5
+      runtime: llama-3-3-70b
+      storageUri: oci://registry.redhat.io/rhelai1/modelcar-llama-3-3-70b-instruct-quantized-w4a16:1.5
       resources:
         requests:
-          cpu: "2"
-          memory: 16Gi
-          nvidia.com/gpu: "1"
-        limits:
-          cpu: "8"
+          cpu: "4"
           memory: 32Gi
-          nvidia.com/gpu: "1"
+          nvidia.com/gpu: "2"
+        limits:
+          cpu: "12"
+          memory: 64Gi
+          nvidia.com/gpu: "2"
       args:
         - --dtype=half
         - --max-model-len=8192
         - --gpu-memory-utilization=0.95
         - --enforce-eager
         - --enable-auto-tool-choice
-        - --tool-call-parser=mistral
-        - --chat-template=/opt/app-root/template/tool_chat_template_mistral3.jinja
+        - --tool-call-parser=llama3_json
+        - --chat-template=/opt/app-root/template/tool_chat_template_llama3.1_json.jinja

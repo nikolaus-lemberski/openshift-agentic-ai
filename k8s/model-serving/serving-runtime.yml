@@ -1,7 +1,7 @@
 apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
-  name: mistral-small-3-1-24b
+  name: llama-3-3-70b
   namespace: triage-assistant
   labels:
     opendatahub.io/dashboard: "true"
@@ -10,7 +10,7 @@ metadata:
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
     opendatahub.io/template-name: vllm-cuda-runtime-template
-    openshift.io/display-name: "Mistral Small 3.1 24B - vLLM"
+    openshift.io/display-name: "Llama 3.3 70B Instruct (INT4) - vLLM"
 spec:
   annotations:
     prometheus.io/path: /metrics
@@ -26,6 +26,7 @@ spec:
         - --port=8080
         - --model=/mnt/models
         - --served-model-name={{.Name}}
+        - --tensor-parallel-size=2
       env:
         - name: HF_HOME
           value: /tmp/hf_home

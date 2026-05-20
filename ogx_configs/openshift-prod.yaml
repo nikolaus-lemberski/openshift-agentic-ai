@@ -10,10 +10,10 @@ apis:
 
 providers:
   inference:
-    - provider_id: mistral-vllm
+    - provider_id: llama-vllm
       provider_type: remote::vllm
       config:
-        base_url: http://mistral-small-3-1-24b-predictor.triage-model-serving.svc.cluster.local:8080/v1
+        base_url: http://llama-3-3-70b-predictor.triage-assistant.svc.cluster.local:8080/v1
         max_tokens: 4096
   files:
     - provider_id: local-files
@@ -50,8 +50,8 @@ providers:
 registered_resources:
   models:
     - model_id: triage-model
-      provider_id: mistral-vllm
-      provider_model_id: mistral-small-3-1-24b
+      provider_id: llama-vllm
+      provider_model_id: llama-3-3-70b
       model_type: llm
       metadata:
         _unprefixed_alias: true
