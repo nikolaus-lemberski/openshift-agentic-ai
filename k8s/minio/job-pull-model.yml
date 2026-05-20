@@ -10,12 +10,12 @@ data:
     from pathlib import Path
     from huggingface_hub import snapshot_download
 
-    MODEL_REPO = os.environ.get("MODEL_REPO", "Qwen/Qwen3.6-27B-FP8")
+    MODEL_REPO = os.environ.get("MODEL_REPO", "Qwen/Qwen3.5-9B")
     MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://minio:9000")
     MINIO_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY_ID", "minioadmin")
     MINIO_SECRET_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "minioadmin")
     BUCKET = os.environ.get("BUCKET", "models")
-    BUCKET_PATH = os.environ.get("BUCKET_PATH", "qwen3.6-27b-fp8")
+    BUCKET_PATH = os.environ.get("BUCKET_PATH", "qwen3.5-9b")
     LOCAL_DIR = "/tmp/model"
 
     print(f"=== Model Pull Job ===")
@@ -69,7 +69,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: pull-qwen36-27b
+  name: pull-qwen35-9b
   namespace: triage-assistant
 spec:
   backoffLimit: 2
@@ -103,7 +103,7 @@ spec:
             - name: MINIO_ENDPOINT
               value: http://minio:9000
             - name: MODEL_REPO
-              value: Qwen/Qwen3.6-27B-FP8
+              value: Qwen/Qwen3.5-9B
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -128,4 +128,4 @@ spec:
             name: pull-model-script
         - name: tmp
           emptyDir:
-            sizeLimit: 40Gi
+            sizeLimit: 25Gi

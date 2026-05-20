@@ -26,7 +26,7 @@ spec:
             - name: LLAMA_STACK_URL
               value: http://triage-llamastack-service:8321
             - name: MODEL_NAME
-              value: qwen-vllm/qwen36-27b
+              value: qwen-vllm/qwen35-9b
             - name: MCP_PATIENT_RECORDS_URL
               value: http://mcp-patient-records:8080/mcp
             - name: MCP_MEDICAL_KNOWLEDGE_URL

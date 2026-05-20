@@ -20,8 +20,8 @@ data:
         - provider_id: qwen-vllm
           provider_type: remote::vllm
           config:
-            base_url: http://qwen36-27b-predictor:8080/v1
-            max_tokens: 4096
+            base_url: http://qwen35-9b-predictor:8080/v1
+            max_tokens: 2048
       files:
         - provider_id: local-files
           provider_type: inline::localfs
@@ -58,7 +58,7 @@ data:
       models:
         - model_id: triage-model
           provider_id: qwen-vllm
-          provider_model_id: qwen36-27b
+          provider_model_id: qwen35-9b
           model_type: llm
           metadata:
             _unprefixed_alias: true
