@@ -18,6 +18,7 @@ spec:
       containers:
         - name: mcp-scheduling
           image: quay.io/nlembers/agentic-ai-webinar-2026-mcp-scheduling:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               protocol: TCP
