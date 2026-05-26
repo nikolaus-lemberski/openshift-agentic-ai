@@ -19,7 +19,7 @@ public class SchedulingMcpServer {
             annotations = @Annotations(readOnlyHint = true))
     public List<SchedulingData.AvailableSlot> getAvailableSlots(
             @ToolArg(description = "Medical specialty, e.g. cardiology, pulmonology") String specialty,
-            @ToolArg(description = "Date range, e.g. 'today' or '2026-05-18 to 2026-05-19'") String dateRange) {
+            @ToolArg(description = "Date range, e.g. 'today', 'tomorrow', or 'next week'") String dateRange) {
         return scheduleDataStore.findAvailableSlotsBySpecialty(specialty);
     }
 
