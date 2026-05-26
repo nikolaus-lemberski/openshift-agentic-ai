@@ -322,18 +322,19 @@ For local development:
 - GPU node available (NVIDIA L4 24GB or better)
 - Pull secret for `registry.redhat.io` configured on the cluster
 
-### 3.2 Deploy Qwen 3.6 27B (FP8)
+### 3.2 Deploy Qwen 3.5 9B
 
 Manifests in `k8s/model-serving/`:
 - `serving-runtime.yml` -- vLLM NVIDIA GPU ServingRuntime for KServe with tensor parallelism
 - `inferenceservice.yml` -- InferenceService CR with S3/MinIO storage
 
 Model details:
-- **Source:** Qwen 3.6 27B with FP8 quantization
-- **Storage:** S3/MinIO bucket (`s3://models/qwen3.6-27b-fp8`)
-- **GPU:** 4x NVIDIA GPUs with `--tensor-parallel-size=4`
-- **Tool calling:** `--tool-call-parser=hermes` + `--enable-auto-tool-choice`
-- **Context window:** 32768 tokens (`--max-model-len=32768`)
+- **Source:** Qwen 3.5 9B (pulled from HuggingFace `Qwen/Qwen3.5-9B` via MinIO job)
+- **Storage:** S3/MinIO bucket (`s3://models/qwen3.5-9b`)
+- **GPU:** 2x NVIDIA GPUs with `--tensor-parallel-size=2`
+- **Tool calling:** `--tool-call-parser=qwen3_xml` + `--enable-auto-tool-choice`
+- **Context window:** 16384 tokens (`--max-model-len=16384`)
+- **Additional flags:** `--language-model-only`, `--gpu-memory-utilization=0.95`, `--default-chat-template-kwargs={"enable_thinking":false}`
 - **Access:** Internal only (no Route, `serving.kserve.io/disableRouteCreation: "true"`)
 
 ### 3.3 Verify
@@ -347,7 +348,7 @@ oc apply -f k8s/model-serving/inferenceservice.yml
 # Test from within the cluster
 oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://qwen36-27b-predictor:8080/v1/models
+  curl -s http://qwen35-9b-predictor:8080/v1/models
 ```
 
 ---
@@ -373,12 +374,12 @@ Manifests in `k8s/llamastack/`:
 - `configmap-stack-config.yml` -- ConfigMap with the OGX stack configuration (inference provider, MCP connectors, storage)
 - `llamastack-distribution.yml` -- `LlamaStackDistribution` CR using the `rh-dev` distribution with `userConfig` referencing the ConfigMap
 
-The OGX stack configuration uses `remote::vllm` as the inference provider pointing at the Qwen 3.6 27B InferenceService, and registers MCP connectors for all three MCP servers (using k8s service names within the `triage-assistant` namespace).
+The OGX stack configuration uses `remote::vllm` as the inference provider pointing at the Qwen 3.5 9B InferenceService, and registers MCP connectors for all three MCP servers (using k8s service names within the `triage-assistant` namespace).
 
 Key details:
 - **Distribution:** `rh-dev` (Red Hat's Llama Stack distribution image)
-- **Inference provider:** `remote::vllm` at `http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1`
-- **Model name:** The vLLM provider auto-registers the model as `qwen-vllm/qwen36-27b` (provider-prefixed). The Quarkus app uses this as the model name.
+- **Inference provider:** `remote::vllm` at `http://qwen35-9b-predictor:8080/v1`
+- **Model name:** The vLLM provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also aliased as `triage-model` via `registered_resources`. The Quarkus app uses `qwen-vllm/qwen35-9b` as the model name.
 - **MCP connectors:** `mcp::patient-records`, `mcp::medical-knowledge`, `mcp::scheduling` pointing at k8s service URLs in the `triage-assistant` namespace
 - **Storage:** 5Gi PVC with SQLite for registry and response persistence
 - **Network:** Internal ClusterIP service on port 8321
@@ -403,7 +404,7 @@ oc run curl-chat -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
   curl -s http://triage-llamastack-service:8321/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "qwen-vllm/qwen36-27b", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model": "qwen-vllm/qwen35-9b", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
 **Acceptance:** Llama Stack is `Ready`, lists the model, and returns inference results routed through vLLM.
@@ -458,7 +459,7 @@ Terminal 5: ogx_configs/.venv/bin/ogx stack run ogx_configs/local-dev.yaml
 Terminal 6: cd triage-assistant && quarkus dev
 ```
 
-Or run `./dev-start.sh` from the project root.
+Or run `podman compose up` from the project root (see [docs/local-dev-environment.md](local-dev-environment.md)).
 
 OGX configuration files live in `ogx_configs/`:
 - `ogx_configs/local-dev.yaml` -- Ollama provider + localhost MCP servers

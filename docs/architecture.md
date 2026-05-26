@@ -24,7 +24,7 @@ graph TD
     end
 
     subgraph openShiftAI [OpenShift AI - Model Serving]
-        vLLM1["vLLM\nQwen 3.6 27B\n(FP8, tool-calling)"]
+        vLLM1["vLLM\nQwen 3.5 9B\n(tool-calling)"]
     end
 
     subgraph mcpLayer [MCP Servers on OpenShift]
@@ -80,9 +80,9 @@ graph TD
 
 | Model | Role | GPU Footprint |
 |-------|------|---------------|
-| Qwen 3.6 27B (FP8) | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | ~29 GiB weights across 4 GPUs |
+| Qwen 3.5 9B | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | 2x NVIDIA GPUs with tensor-parallel-size=2 |
 
-The model weights are served from a MinIO S3 bucket (`s3://models/qwen3.6-27b-fp8`) within the cluster. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080`.
+The model weights are served from a MinIO S3 bucket (`s3://models/qwen3.5-9b`) within the cluster. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
 
 Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by deploying a new InferenceService and updating the Llama Stack provider config.
 
@@ -110,27 +110,29 @@ providers:
     - provider_id: qwen-vllm
       provider_type: remote::vllm
       config:
-        base_url: http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080/v1
+        base_url: http://qwen35-9b-predictor:8080/v1
+        max_tokens: 2048
 
 registered_resources:
   models:
     - model_id: triage-model
       provider_id: qwen-vllm
-      provider_model_id: qwen36-27b
+      provider_model_id: qwen35-9b
+      model_type: llm
 
 connectors:
   - connector_id: "mcp::patient-records"
     connector_type: mcp
-    url: "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp"
+    url: "http://mcp-patient-records:8080/mcp"
   - connector_id: "mcp::medical-knowledge"
     connector_type: mcp
-    url: "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp"
+    url: "http://mcp-medical-knowledge:8080/mcp"
   - connector_id: "mcp::scheduling"
     connector_type: mcp
-    url: "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp"
+    url: "http://mcp-scheduling:8080/mcp"
 ```
 
-On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen36-27b` (provider-prefixed).
+On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
 
 For local development, `ogx_configs/local-dev.yaml` uses the same structure but with `remote::ollama` as the inference provider and localhost URLs for MCP servers. See [local-dev-environment.md](local-dev-environment.md).
 
@@ -274,7 +276,7 @@ sequenceDiagram
 
     Note over QuarkusApp: No restart needed.<br/>Next request uses new model.
 
-    QuarkusApp->>LSServer: POST /v1/responses<br/>model: qwen-vllm/qwen36-27b
+    QuarkusApp->>LSServer: POST /v1/responses<br/>model: qwen-vllm/qwen35-9b
     LSServer->>LSServer: Route to configured vLLM backend
 ```
 
@@ -312,7 +314,7 @@ sequenceDiagram
 │  │ Namespace: triage-assistant                               │  │
 │  │                                                           │  │
 │  │  ┌────────────────────────┐  ┌───────────────────────┐    │  │
-│  │  │ Quarkus Chat UI        │  │ vLLM: Qwen 3.6 27B   │    │  │
+│  │  │ Quarkus Chat UI        │  │ vLLM: Qwen 3.5 9B    │    │  │
 │  │  │ (Deployment)           │  │ (InferenceService)    │    │  │
 │  │  │ Only talks to ─────────┤  └───────────────────────┘    │  │
 │  │  │ Llama Stack            │            ▲                  │  │

@@ -1,0 +1,21 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: gen-ai-aa-mcp-servers
+  namespace: redhat-ods-applications
+data:
+  Patient-Records-MCP-Server: |
+    {
+      "url": "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp",
+      "description": "Patient Records MCP server provides access to patient demographic information, medical history, current medications, allergies, and recent visits. Use this server to look up patient details during triage intake."
+    }
+  Medical-Knowledge-MCP-Server: |
+    {
+      "url": "http://mcp-medical-knowledge.triage-assistant.svc.cluster.local:8080/mcp",
+      "description": "Medical Knowledge MCP server provides clinical decision support including triage assessment with ESI scoring, drug interaction checking, and medical protocol lookup. Use this server to assess symptom urgency and verify medication safety."
+    }
+  Scheduling-MCP-Server: |
+    {
+      "url": "http://mcp-scheduling.triage-assistant.svc.cluster.local:8080/mcp",
+      "description": "Scheduling MCP server manages appointment availability and booking for medical specialists. Use this server to find available time slots by specialty and book appointments for patients."
+    }

@@ -31,24 +31,31 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 ```
 .
 ├── README.md                          # This file
+├── compose.yaml                       # Podman/Docker Compose for local dev stack
+├── tag_and_push.sh                    # Build and push container images
 ├── docs/
 │   ├── architecture.md                # Architecture overview and diagrams
 │   ├── prd.md                         # Product Requirements Document
 │   ├── implementation-plan.md         # Step-by-step implementation plan
 │   ├── local-dev-environment.md       # Local dev setup with Ollama + OGX
 │   └── webinar-story.md              # Scripted webinar narrative and demo flow
+├── triage-assistant/                  # Quarkus thin chat UI (REST client to Llama Stack + WebSocket)
+├── mcp-patient-records/               # Patient Records MCP server
+├── mcp-medical-knowledge/             # Medical Knowledge MCP server
+├── mcp-scheduling/                    # Appointment Scheduling MCP server
 ├── ogx_configs/                       # OGX (Llama Stack) configuration
-│   ├── .venv/                         # Python venv with OGX (created via uv, gitignored)
 │   ├── local-dev.yaml                 # OGX config: Ollama + localhost MCP servers
 │   └── openshift-prod.yaml            # OGX config: vLLM + k8s service MCP servers
-├── dev-start.sh                       # Startup script for local development
-├── triage-assistant/                  # Quarkus chat UI application (TODO)
-├── mcp-patient-records/               # Patient Records MCP server (TODO)
-├── mcp-medical-knowledge/             # Medical Knowledge MCP server (TODO)
-├── mcp-scheduling/                    # Appointment Scheduling MCP server (TODO)
-└── k8s/                               # OpenShift / Llama Stack manifests (TODO)
-    ├── model-serving/                 # InferenceService CRs for vLLM
-    └── llamastack/                    # LlamaStackDistribution CR + connector config
+├── scripts/
+│   ├── deploy.sh                      # Full infrastructure deployment script
+│   └── pull-model-to-minio.sh         # Pull model weights into MinIO
+└── k8s/                               # OpenShift manifests
+    ├── namespace.yml                  # triage-assistant namespace
+    ├── model-serving/                 # ServingRuntime + InferenceService for vLLM
+    ├── llamastack/                    # LlamaStackDistribution CR + stack config ConfigMap
+    ├── minio/                         # MinIO S3 storage (deployment, PVC, secrets, model pull job)
+    ├── apps/                          # Application deployments, services, and routes
+    └── openshift-ai/                  # OpenShift AI MCP server integration ConfigMap
 ```
 
 ## Tech Stack
@@ -57,7 +64,7 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 |-------|-----------|------|
 | Chat UI | Quarkus + WebSockets | Thin UI, delegates all AI to Llama Stack |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP tool execution, agentic loop (`/v1/responses`) |
-| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Qwen 3.6 27B FP8 via S3/MinIO) |
+| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Qwen 3.5 9B via S3/MinIO) |
 | Agent Tools | MCP Servers (Quarkus) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift | Container orchestration, GPU management |
 

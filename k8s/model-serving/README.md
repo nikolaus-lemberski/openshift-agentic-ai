@@ -1,17 +1,16 @@
-# Model Serving - Qwen 3.6 27B (FP8)
+# Model Serving - Qwen 3.5 9B
 
 Deploy vLLM model serving with S3/MinIO storage on OpenShift AI. The model is internal-only (no external Route) -- accessed by Llama Stack within the same namespace.
 
 ## Hardware
 
-- 4x NVIDIA GPUs on g6.12xlarge
-- Model: **Qwen 3.6 27B (FP8)** with tensor-parallel-size=4
-- Dense 27.8B parameter model, hybrid attention (64 layers)
+- 2x NVIDIA GPUs on g6.12xlarge
+- Model: **Qwen 3.5 9B** with tensor-parallel-size=2
 
 ## Prerequisites
 
 - OpenShift 4.16+ with OpenShift AI 3.x installed
-- GPU node with at least 2x NVIDIA L4 (or better)
+- GPU node with at least 2x NVIDIA GPUs
 - MinIO deployed and model uploaded (see below)
 - `oc` CLI logged in as cluster-admin
 
@@ -23,14 +22,14 @@ oc apply -f k8s/minio/
 
 # 2. Pull model into MinIO (runs as a Job in-cluster)
 ./scripts/pull-model-to-minio.sh
-oc logs -f job/pull-qwen36-27b -n triage-assistant
+oc logs -f job/pull-qwen35-9b -n triage-assistant
 
 # 3. Deploy ServingRuntime and InferenceService
 oc apply -f k8s/model-serving/serving-runtime.yml
 oc apply -f k8s/model-serving/inferenceservice.yml
 
 # 4. Wait for model to load
-oc wait --for=condition=Ready inferenceservice/qwen36-27b \
+oc wait --for=condition=Ready inferenceservice/qwen35-9b \
   -n triage-assistant --timeout=600s
 ```
 
@@ -39,13 +38,13 @@ oc wait --for=condition=Ready inferenceservice/qwen36-27b \
 The model is available within the `triage-assistant` namespace at:
 
 ```
-http://qwen36-27b-predictor:8080
+http://qwen35-9b-predictor:8080
 ```
 
 Or using the full FQDN:
 
 ```
-http://qwen36-27b-predictor.triage-assistant.svc.cluster.local:8080
+http://qwen35-9b-predictor.triage-assistant.svc.cluster.local:8080
 ```
 
 This is the URL Llama Stack (OGX) uses as its inference provider.
@@ -58,35 +57,37 @@ Use a temporary pod to test from within the cluster:
 # List models
 oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://qwen36-27b-predictor:8080/v1/models
+  curl -s http://qwen35-9b-predictor:8080/v1/models
 
 # Test chat completion
 oc run curl-test -n triage-assistant --rm -it --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://qwen36-27b-predictor:8080/v1/chat/completions \
+  curl -s http://qwen35-9b-predictor:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen36-27b","messages":[{"role":"user","content":"Hello"}],"max_tokens":50}'
+  -d '{"model":"qwen35-9b","messages":[{"role":"user","content":"Hello"}],"max_tokens":50}'
 ```
 
 ## Model Details
 
 | Property | Value |
 |----------|-------|
-| Model | Qwen 3.6 27B (FP8) |
-| Parameters | 27.8B dense (all active) |
-| Quantization | FP8 (~29GB weights) |
-| VRAM usage | ~14.5GB weights per GPU + KV cache |
-| Context window | 32768 tokens (native supports up to 262K) |
-| Tool calling | `--tool-call-parser=hermes` + `--enable-auto-tool-choice` |
-| Tensor parallelism | 4 (across 4 GPUs) |
-| Storage | MinIO S3: `s3://models/qwen3.6-27b-fp8` |
+| Model | Qwen 3.5 9B |
+| Source | HuggingFace `Qwen/Qwen3.5-9B` |
+| dtype | auto |
+| Context window | 16384 tokens (`--max-model-len=16384`) |
+| Tool calling | `--tool-call-parser=qwen3_xml` + `--enable-auto-tool-choice` |
+| Thinking mode | Disabled (`--default-chat-template-kwargs={"enable_thinking":false}`) |
+| Additional flags | `--language-model-only`, `--gpu-memory-utilization=0.95` |
+| Tensor parallelism | 2 (across 2 GPUs) |
+| Shared memory | 12Gi |
+| Storage | MinIO S3: `s3://models/qwen3.5-9b` |
 | Namespace | `triage-assistant` |
-| Internal URL | `http://qwen36-27b-predictor:8080` |
+| Internal URL | `http://qwen35-9b-predictor:8080` |
 
 ## Notes
 
-- **S3/MinIO storage** -- model weights are served from a MinIO bucket within the cluster.
-- **Tensor parallel** -- the model is split across 4 GPUs; the serving runtime sets `--tensor-parallel-size=4`.
+- **S3/MinIO storage** -- model weights are pulled from HuggingFace via a Kubernetes Job and stored in a MinIO bucket within the cluster.
+- **Tensor parallel** -- the model is split across 2 GPUs; the serving runtime sets `--tensor-parallel-size=2`.
 - **Single namespace** -- all components (MinIO, model serving, Llama Stack, MCP servers, chat UI) live in `triage-assistant`.
 - **Internal only** -- `serving.kserve.io/disableRouteCreation: "true"` prevents external Route creation.
 - **No auth needed** -- traffic stays within the cluster network.
