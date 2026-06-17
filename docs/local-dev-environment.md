@@ -179,7 +179,7 @@ This starts the OGX server and all three MCP servers:
 | mcp-medical-knowledge | 8082 | 8080 |
 | mcp-scheduling | 8083 | 8080 |
 
-OGX reaches Ollama on the host via `host.docker.internal:11434` and the MCP servers via compose service names.
+OGX reaches Ollama on the host via `host.containers.internal:11434` (Podman's host alias; `extra_hosts` maps it on Linux) and the MCP servers via compose service names. Override with `OLLAMA_URL` if needed.
 
 **Step 3: Start the Chat UI** (once built)
 

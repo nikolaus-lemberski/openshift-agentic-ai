@@ -33,6 +33,8 @@ spec:
               value: http://mcp-medical-knowledge:8080/mcp
             - name: MCP_SCHEDULING_URL
               value: http://mcp-scheduling:8080/mcp
+            - name: GUARDRAIL_IDS
+              value: prompt-guard
           livenessProbe:
             tcpSocket:
               port: 8080

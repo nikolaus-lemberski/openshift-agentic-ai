@@ -1,0 +1,23 @@
+graph TD
+    Idea([Idea / Feature Request]) --> Brainstorm
+
+    Brainstorm[BRAINSTORM & CHALLENGE<br/>Stress-test the idea with AI<br/>Resolve ambiguity early]
+    Brainstorm -->|Shared understanding| Spec
+
+    Spec[SPEC IT OUT<br/>AI drafts PRD from context<br/>Human reviews & refines]
+    Spec -->|Approved PRD| Break
+
+    Break[BREAK IT DOWN<br/>AI slices PRD into issues<br/>Each issue is self-contained]
+    Break -->|Backlog ready| Execute
+
+    Execute[EXECUTE AFK<br/>Agents pick up issues autonomously<br/>Human reviews async]
+    Execute --> Ship([Merged PRs])
+
+    Execute -.->|Blocker or failed review| Brainstorm
+
+    style Idea fill:#4CAF50,color:#fff,stroke:#388E3C
+    style Brainstorm fill:#FF9800,color:#fff,stroke:#E65100
+    style Spec fill:#9C27B0,color:#fff,stroke:#6A1B9A
+    style Break fill:#00BCD4,color:#fff,stroke:#00838F
+    style Execute fill:#F44336,color:#fff,stroke:#B71C1C
+    style Ship fill:#2196F3,color:#fff,stroke:#1565C0

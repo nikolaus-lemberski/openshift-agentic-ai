@@ -49,13 +49,24 @@ echo "Waiting for MinIO to be ready..."
 oc rollout status deployment/minio -n "${NAMESPACE}" --timeout=120s
 echo ""
 
+# ─── Phase 2b: HuggingFace Token ────────────────────────────────────────────
+
+if [ -n "${HF_TOKEN:-}" ]; then
+  echo "[HF] Creating HuggingFace token secret from \$HF_TOKEN..."
+  envsubst < "${K8S_DIR}/minio/secret-hf-token.yml" | oc apply -f -
+  echo ""
+else
+  echo "[HF] No \$HF_TOKEN set -- skipping HuggingFace token secret."
+  echo "     (Not required: PromptGuard model is ungated.)"
+  echo "     Set HF_TOKEN=hf_xxx for faster authenticated downloads."
+  echo ""
+fi
+
 # ─── Phase 3: Model Pull (HuggingFace → MinIO) ─────────────────────────────
 
 echo "=== Phase 3: Model Pull ==="
 echo ""
 echo "Launching Job to download model from HuggingFace into MinIO..."
-echo "(Ensure hf-token secret exists if model is gated:"
-echo "  oc create secret generic hf-token --from-literal=token=hf_xxx -n ${NAMESPACE})"
 echo ""
 
 oc delete job pull-qwen35-9b -n "${NAMESPACE}" --ignore-not-found
@@ -130,6 +141,55 @@ oc wait --for=condition=Ready pod \
 }
 echo ""
 
+# ─── Phase 6: PromptGuard Model Pull (protectai/deberta-v3-base-prompt-injection-v2) ──
+
+echo "=== Phase 6: PromptGuard Model Pull ==="
+echo ""
+echo "Launching Job to download PromptGuard model from HuggingFace into MinIO..."
+echo "(protectai/deberta-v3-base-prompt-injection-v2 -- ungated, Apache 2.0)"
+echo ""
+
+oc delete job pull-promptguard -n "${NAMESPACE}" --ignore-not-found
+oc apply -f "${K8S_DIR}/promptguard/job-pull-promptguard.yml"
+
+echo ""
+echo "Waiting for PromptGuard model pull Job to complete..."
+oc wait --for=condition=Complete "job/pull-promptguard" \
+  -n "${NAMESPACE}" --timeout=600s || {
+  echo ""
+  echo "WARNING: PromptGuard model pull job did not complete within 10 minutes."
+  echo "  Logs: oc logs -f job/pull-promptguard -n ${NAMESPACE}"
+  echo "Continuing with deployment..."
+  echo ""
+}
+echo ""
+
+# ─── Phase 7: PromptGuard Service ────────────────────────────────────────
+
+echo "=== Phase 7: PromptGuard Service ==="
+echo ""
+
+echo "[1/3] Creating PromptGuard code ConfigMap from source..."
+oc create configmap promptguard-code \
+  --from-file=server.py="${PROJECT_DIR}/promptguard-service/src/server.py" \
+  -n "${NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
+
+echo "[2/3] Deploying PromptGuard Service..."
+oc apply -f "${K8S_DIR}/promptguard/deployment.yml"
+
+echo "[3/3] Creating PromptGuard Service..."
+oc apply -f "${K8S_DIR}/promptguard/service.yml"
+
+echo ""
+echo "Waiting for PromptGuard pod to be ready..."
+oc rollout status deployment/promptguard-service -n "${NAMESPACE}" --timeout=300s || {
+  echo ""
+  echo "WARNING: PromptGuard service did not become ready within 5 minutes."
+  echo "Check status: oc get pods -n ${NAMESPACE} -l app=promptguard-service"
+  echo ""
+}
+echo ""
+
 # ─── Summary ────────────────────────────────────────────────────────────────
 
 echo "============================================"
@@ -141,8 +201,14 @@ echo "  - Namespace:        ${NAMESPACE}"
 echo "  - MinIO:            minio.${NAMESPACE}.svc:9000"
 echo "  - Model:            ${ISVC_NAME} (vLLM)"
 echo "  - Llama Stack:      triage-llamastack.${NAMESPACE}.svc:8321"
+echo "  - PromptGuard:      promptguard-service.${NAMESPACE}.svc:8080"
 echo ""
 echo "Next steps:"
-echo "  Deploy the apps (MCP servers + Chat UI):"
-echo "    oc apply -f k8s/apps/"
+echo "  1. Deploy the apps (MCP servers + Chat UI):"
+echo "       oc apply -f k8s/apps/"
+echo ""
+echo "  2. To enable guardrails (after demonstrating without):"
+echo "       oc apply -f k8s/llamastack/configmap-stack-config-guardrails.yml"
+echo "       oc delete pod -n ${NAMESPACE} -l app.kubernetes.io/instance=triage-llamastack"
+echo "       oc set env deployment/triage-assistant -n ${NAMESPACE} GUARDRAIL_IDS=prompt-guard"
 echo ""

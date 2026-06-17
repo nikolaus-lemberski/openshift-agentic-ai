@@ -3,9 +3,11 @@ services:
     build: ./ogx_configs
     ports:
       - "8321:8321"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     environment:
       RUN_CONFIG_PATH: /app/config.yaml
-      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.containers.internal:11434}
       MCP_PATIENT_RECORDS_URL: http://mcp-patient-records:8080/mcp/sse
       MCP_MEDICAL_KNOWLEDGE_URL: http://mcp-medical-knowledge:8080/mcp/sse
       MCP_SCHEDULING_URL: http://mcp-scheduling:8080/mcp/sse

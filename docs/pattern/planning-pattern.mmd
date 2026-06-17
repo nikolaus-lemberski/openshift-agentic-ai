@@ -1,0 +1,27 @@
+graph LR
+    Start([Complex Goal]) --> Plan
+
+    Plan[PLAN<br/>Break Into Steps]
+    Plan --> Execute
+
+    Execute[EXECUTE<br/>Run Current Step]
+    Execute --> Evaluate
+
+    Evaluate{Step Successful?}
+    Evaluate -->|No| Replan
+    Evaluate -->|Yes| Done
+
+    Replan[REPLAN<br/>Adjust Remaining Steps]
+    Replan --> Execute
+
+    Done{All Steps Done?}
+    Done -->|No| Execute
+    Done -->|Yes| Final([Final Result])
+
+    style Start fill:#4CAF50,color:#fff,stroke:#388E3C
+    style Final fill:#2196F3,color:#fff,stroke:#1565C0
+    style Plan fill:#FF9800,color:#fff,stroke:#E65100
+    style Execute fill:#9C27B0,color:#fff,stroke:#6A1B9A
+    style Evaluate fill:#F44336,color:#fff,stroke:#B71C1C
+    style Replan fill:#00BCD4,color:#fff,stroke:#00838F
+    style Done fill:#F44336,color:#fff,stroke:#B71C1C

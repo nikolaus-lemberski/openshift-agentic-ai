@@ -17,6 +17,7 @@ public record OutputItem(
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ContentItem(
             String type,
-            String text) {
+            String text,
+            String refusal) {
     }
 }

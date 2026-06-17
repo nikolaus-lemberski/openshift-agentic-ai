@@ -21,6 +21,11 @@ public class PatientRecordsMcpServer {
     @Inject
     SampleDataStore dataStore;
 
+    @Tool(description = "List all patients currently registered in the system.")
+    public List<Patient> listAllPatients() {
+        return dataStore.getAllPatients();
+    }
+
     @Tool(description = "Search for a patient by name and date of birth. Returns patient ID and demographics.")
     public Patient searchPatient(
             @ToolArg(description = "Patient full name") String name,

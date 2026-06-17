@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: promptguard-service
+  namespace: triage-assistant
+  labels:
+    app: promptguard-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: promptguard-service
+  template:
+    metadata:
+      labels:
+        app: promptguard-service
+    spec:
+      initContainers:
+        - name: download-model
+          image: registry.access.redhat.com/ubi10/python-312-minimal:latest
+          command:
+            - sh
+            - -c
+            - |
+              pip install --quiet boto3 && python -c "
+              import os, boto3
+              from pathlib import Path
+
+              s3 = boto3.client('s3',
+                  endpoint_url=os.environ['MINIO_ENDPOINT'],
+                  aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                  aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                  region_name='us-east-1')
+
+              bucket = 'models'
+              prefix = 'promptguard/'
+              dest = Path('/models/promptguard')
+              dest.mkdir(parents=True, exist_ok=True)
+
+              paginator = s3.get_paginator('list_objects_v2')
+              for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                  for obj in page.get('Contents', []):
+                      key = obj['Key']
+                      rel = key[len(prefix):]
+                      if not rel:
+                          continue
+                      local = dest / rel
+                      local.parent.mkdir(parents=True, exist_ok=True)
+                      size_mb = obj['Size'] / (1024*1024)
+                      print(f'Downloading {rel} ({size_mb:.1f} MB)')
+                      s3.download_file(bucket, key, str(local))
+              print('Model download complete.')
+              "
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: MINIO_ENDPOINT
+              value: http://minio:9000
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+        - name: install-deps
+          image: registry.access.redhat.com/ubi10/python-312-minimal:latest
+          command:
+            - sh
+            - -c
+            - |
+              pip install --no-cache-dir -t /app/deps \
+                torch --index-url https://download.pytorch.org/whl/cu126 && \
+              pip install --no-cache-dir -t /app/deps \
+                transformers sentencepiece fastapi 'uvicorn[standard]' && \
+              echo "Dependencies installed successfully."
+          volumeMounts:
+            - name: app-deps
+              mountPath: /app/deps
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      containers:
+        - name: promptguard
+          image: registry.access.redhat.com/ubi10/python-312-minimal:latest
+          command:
+            - python
+            - -m
+            - uvicorn
+            - src.server:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8080"
+          workingDir: /app
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PYTHONPATH
+              value: /app/deps
+            - name: MODEL_PATH
+              value: /models/promptguard
+            - name: THRESHOLD
+              value: "0.5"
+          volumeMounts:
+            - name: app-deps
+              mountPath: /app/deps
+              readOnly: true
+            - name: model-storage
+              mountPath: /models
+              readOnly: true
+            - name: app-code
+              mountPath: /app/src
+              readOnly: true
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "2"
+              memory: 4Gi
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: model-storage
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: app-deps
+          emptyDir:
+            sizeLimit: 10Gi
+        - name: app-code
+          configMap:
+            name: promptguard-code

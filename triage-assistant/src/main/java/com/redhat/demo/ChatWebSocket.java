@@ -34,10 +34,13 @@ public class ChatWebSocket {
     public String onMessage(String message) throws Exception {
         try {
             TriageService.ChatResponse response = triageService.chat(message, lastResponseId);
-            lastResponseId = response.responseId();
+            if (!response.refused()) {
+                lastResponseId = response.responseId();
+            }
             var reply = new WebSocketMessage("assistant", response.text(), response.toolCalls());
             return objectMapper.writeValueAsString(reply);
         } catch (Exception e) {
+            lastResponseId = null;
             var error = new WebSocketMessage(
                     "error",
                     "Sorry, I encountered an error processing your request: " + e.getMessage(),

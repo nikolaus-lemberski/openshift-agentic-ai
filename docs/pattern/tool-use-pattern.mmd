@@ -1,0 +1,26 @@
+graph LR
+    Start([User Query]) --> Agent
+
+    Agent[AI AGENT<br/>Decision Maker]
+    Agent --> Response([Enriched Response])
+
+    Agent --- Tools
+
+    subgraph Tools
+        API[API Call]
+        DB[Database Query]
+        Python[Python Script]
+        Web[Web Search]
+        File[File Operations]
+        External[External System]
+    end
+
+    style Start fill:#4CAF50,color:#fff,stroke:#388E3C
+    style Response fill:#2196F3,color:#fff,stroke:#1565C0
+    style Agent fill:#FF9800,color:#fff,stroke:#E65100
+    style API fill:#9C27B0,color:#fff,stroke:#6A1B9A
+    style DB fill:#00BCD4,color:#fff,stroke:#00838F
+    style Python fill:#F44336,color:#fff,stroke:#B71C1C
+    style Web fill:#3F51B5,color:#fff,stroke:#1A237E
+    style File fill:#795548,color:#fff,stroke:#4E342E
+    style External fill:#607D8B,color:#fff,stroke:#37474F

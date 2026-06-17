@@ -17,7 +17,7 @@ spec:
     prometheus.io/port: "8080"
   containers:
     - name: kserve-container
-      image: docker.io/vllm/vllm-openai:latest
+      image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.3.1
       command:
         - python3
         - -m
@@ -36,6 +36,10 @@ spec:
           value: /tmp/triton_cache
         - name: XDG_CACHE_HOME
           value: /tmp/cache
+        - name: TORCHINDUCTOR_CACHE_DIR
+          value: /tmp/torch_cache
+        - name: USER
+          value: vllm
       ports:
         - containerPort: 8080
           protocol: TCP

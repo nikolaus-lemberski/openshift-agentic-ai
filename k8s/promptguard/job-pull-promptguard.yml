@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pull-promptguard
+  namespace: triage-assistant
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: pull-model
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pull-model
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command:
+            - bash
+            - -c
+            - |
+              pip install --quiet huggingface_hub boto3 && \
+              python /scripts/pull_model.py
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: MINIO_ENDPOINT
+              value: http://minio:9000
+            - name: MODEL_REPO
+              value: protectai/deberta-v3-base-prompt-injection-v2
+            - name: BUCKET_PATH
+              value: promptguard
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: script
+          configMap:
+            name: pull-model-script
+        - name: tmp
+          emptyDir:
+            sizeLimit: 5Gi

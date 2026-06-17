@@ -117,6 +117,10 @@ public class SampleDataStore {
         visitsByPatientId.put(patientId, new ArrayList<>(visits));
     }
 
+    public List<Patient> getAllPatients() {
+        return List.copyOf(patientsById.values());
+    }
+
     public Optional<Patient> getPatientById(String patientId) {
         if (patientId == null || patientId.isBlank()) {
             return Optional.empty();

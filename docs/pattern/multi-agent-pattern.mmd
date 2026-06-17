@@ -1,0 +1,22 @@
+graph LR
+    Start([Complex Task]) --> Coordinator
+
+    Coordinator[COORDINATOR<br/>Routes and Synthesizes]
+    Coordinator --> Result([Comprehensive Result])
+
+    Coordinator --- Agents
+
+    subgraph Agents
+        Data[Data Agent]
+        Analysis[Analysis Agent]
+        Writing[Writing Agent]
+        Review[Review Agent]
+    end
+
+    style Start fill:#4CAF50,color:#fff,stroke:#388E3C
+    style Result fill:#2196F3,color:#fff,stroke:#1565C0
+    style Coordinator fill:#FF9800,color:#fff,stroke:#E65100
+    style Data fill:#9C27B0,color:#fff,stroke:#6A1B9A
+    style Analysis fill:#00BCD4,color:#fff,stroke:#00838F
+    style Writing fill:#F44336,color:#fff,stroke:#B71C1C
+    style Review fill:#3F51B5,color:#fff,stroke:#1A237E

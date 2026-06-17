@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: promptguard-service
+  namespace: triage-assistant
+  labels:
+    app: promptguard-service
+spec:
+  selector:
+    app: promptguard-service
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP

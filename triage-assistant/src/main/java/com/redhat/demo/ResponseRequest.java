@@ -11,9 +11,10 @@ public record ResponseRequest(
         Object input,
         List<ToolConfig> tools,
         String previous_response_id,
-        String service_tier) {
+        String service_tier,
+        List<String> guardrails) {
 
     public ResponseRequest(String model, String instructions, Object input, List<ToolConfig> tools) {
-        this(model, instructions, input, tools, null, "default");
+        this(model, instructions, input, tools, null, "default", null);
     }
 }
