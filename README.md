@@ -31,20 +31,18 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 ```
 .
 ├── README.md                          # This file
-├── compose.yaml                       # Podman/Docker Compose for local dev stack
-├── tag_and_push.sh                    # Build and push container images
+├── build.sh                           # Build container images with podman
+├── tag_and_push.sh                    # Push container images to registry
 ├── docs/
 │   ├── architecture.md                # Architecture overview and diagrams
 │   ├── prd.md                         # Product Requirements Document
 │   ├── implementation-plan.md         # Step-by-step implementation plan
-│   ├── local-dev-environment.md       # Local dev setup with Ollama + OGX
 │   └── webinar-story.md              # Scripted webinar narrative and demo flow
 ├── triage-assistant/                  # Quarkus thin chat UI (REST client to Llama Stack + WebSocket)
 ├── mcp-patient-records/               # Patient Records MCP server
 ├── mcp-medical-knowledge/             # Medical Knowledge MCP server
 ├── mcp-scheduling/                    # Appointment Scheduling MCP server
 ├── ogx_configs/                       # OGX (Llama Stack) configuration
-│   ├── local-dev.yaml                 # OGX config: Ollama + localhost MCP servers
 │   └── openshift-prod.yaml            # OGX config: vLLM + k8s service MCP servers
 ├── scripts/
 │   ├── deploy.sh                      # Full infrastructure deployment script
@@ -79,3 +77,28 @@ Llama Stack (OGX) is **not** just a model router -- it is the **full AI middlewa
 5. Returns the final response to the Quarkus app
 
 This means both **model switching** and **tool switching** are platform operations managed through Llama Stack configuration -- the application never changes.
+
+## Local Testing
+
+The MCP servers are self-contained Quarkus apps with in-memory sample data and no external dependencies. Run any MCP server with `quarkus dev` and test it with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+
+```bash
+cd mcp-patient-records && quarkus dev -Dquarkus.http.port=8081
+
+# In another terminal, start MCP Inspector and connect to the server
+npx @modelcontextprotocol/inspector --url http://localhost:8081/mcp
+```
+
+The triage-assistant is a thin REST client to Llama Stack and requires the full stack on OpenShift for end-to-end testing.
+
+## Build and Deploy
+
+Build container images, push them to the registry, and deploy the full infrastructure to OpenShift:
+
+```bash
+./build.sh
+./tag_and_push.sh
+./scripts/deploy.sh
+```
+
+The deploy script provisions everything (namespace, SeaweedFS, model serving, Llama Stack, PromptGuard, application deployments) and waits for each component to become ready. See `docs/webinar-story.md` for the demo flow.

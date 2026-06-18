@@ -13,21 +13,16 @@ SERVICES=(
   mcp-scheduling
 )
 
-COMPOSE_PROJECT="agentic-ai-webinar-2026"
-
-echo "Tagging and pushing images to ${REGISTRY}/${USERNAME}/${PREFIX}-* with tag '${TAG}'"
+echo "Pushing images to ${REGISTRY}/${USERNAME}/${PREFIX}-* with tag '${TAG}'"
 echo ""
 
 for SERVICE in "${SERVICES[@]}"; do
-  LOCAL_IMAGE="localhost/${COMPOSE_PROJECT}_${SERVICE}"
-  REMOTE_IMAGE="${REGISTRY}/${USERNAME}/${PREFIX}-${SERVICE}:${TAG}"
+  IMAGE="${REGISTRY}/${USERNAME}/${PREFIX}-${SERVICE}:${TAG}"
 
   echo "==> ${SERVICE}"
-  echo "    Local:  ${LOCAL_IMAGE}"
-  echo "    Remote: ${REMOTE_IMAGE}"
+  echo "    Image: ${IMAGE}"
 
-  podman tag "${LOCAL_IMAGE}" "${REMOTE_IMAGE}"
-  podman push "${REMOTE_IMAGE}"
+  podman push "${IMAGE}"
   echo ""
 done
 

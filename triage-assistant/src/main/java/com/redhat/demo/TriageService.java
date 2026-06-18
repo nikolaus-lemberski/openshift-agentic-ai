@@ -43,7 +43,10 @@ public class TriageService {
     }
 
     public ChatResponse chat(String userMessage, String previousResponseId) {
-        var guards = guardrailIds.filter(ids -> !ids.isEmpty()).orElse(null);
+        var guards = guardrailIds
+                .map(ids -> ids.stream().filter(s -> s != null && !s.isBlank()).toList())
+                .filter(ids -> !ids.isEmpty())
+                .orElse(null);
         var request = new ResponseRequest(model, systemPrompt, userMessage, getTools(), previousResponseId, "default",
                 guards);
         try {

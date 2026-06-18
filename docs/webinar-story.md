@@ -250,11 +250,11 @@ providers:
 
 > "Let's fix this."
 
-### Enabling PromptGuard (2 min)
+### Activating PromptGuard (2 min)
 
 **[SWITCH TO: Terminal]**
 
-> "We have PromptGuard already running on the cluster. It's ProtectAI's DeBERTa-v3 prompt injection detector -- an 86-million parameter model, Apache 2.0 licensed, specifically trained to detect prompt injection attacks. It runs as a lightweight microservice on CPU -- no GPU required."
+> "PromptGuard is already running on the cluster -- the platform team deployed it as part of the infrastructure. It's ProtectAI's DeBERTa-v3 prompt injection detector -- an 86-million parameter model, Apache 2.0 licensed, specifically trained to detect prompt injection attacks. It runs as a lightweight microservice on CPU -- no GPU required."
 
 ```bash
 oc get pods -n triage-assistant -l app=promptguard-service
@@ -262,14 +262,11 @@ oc get pods -n triage-assistant -l app=promptguard-service
 # promptguard-service-xxxxx-xxxxx         1/1     Running   0          ...
 ```
 
-> "To enable it, we register PromptGuard as a safety provider in Llama Stack and tell the triage assistant to activate guardrails. Two config changes -- no code changes."
+> "It's already registered as a safety provider in Llama Stack's config. But the triage assistant isn't using it yet -- it hasn't been told to send requests through the guardrail. Let's activate it. One environment variable:"
 
-**Show the key additions in the guardrails ConfigMap:**
+**Show the Llama Stack config already has the safety provider (highlight this is pre-staged):**
 
 ```yaml
-apis:
-  - safety                    # enable the safety API
-
 providers:
   safety:
     - provider_id: prompt-guard
@@ -283,15 +280,13 @@ registered_resources:
       provider_id: prompt-guard
 ```
 
-**Apply the guardrails ConfigMap, restart Llama Stack, and enable guardrails on the app:**
+**Activate guardrails on the app:**
 
 ```bash
-oc apply -f k8s/llamastack/configmap-stack-config-guardrails.yml
-oc delete pod -n triage-assistant -l app.kubernetes.io/instance=triage-llamastack
 oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-guard
 ```
 
-> "We register the safety provider, restart Llama Stack, and flip an environment variable. No code changes. The platform team just enabled a security control."
+> "One command. No Llama Stack restart. No code changes. The platform team pre-staged the security capability, and we just activated it on the application. That's what 'guardrails as a platform operation' means."
 
 ### The Attack, Blocked (2 min)
 

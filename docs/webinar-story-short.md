@@ -132,20 +132,19 @@ Model governance AND tool governance = platform operations. AI safety committee 
 
 **Expected:** Without guardrails, model complies and dumps all patient records. This is social engineering — not a crude jailbreak. In healthcare, it's bulk data exfiltration / HIPAA violation.
 
-### Enabling PromptGuard (2 min) — [SWITCH TO: Terminal]
+### Activating PromptGuard (2 min) — [SWITCH TO: Terminal]
 
 - ProtectAI's DeBERTa-v3 prompt injection detector — 86M params, Apache 2.0, runs on CPU.
-- Show pod: `oc get pods -n triage-assistant -l app=promptguard-service`
+- Already deployed and registered in Llama Stack as part of infrastructure. Show pod: `oc get pods -n triage-assistant -l app=promptguard-service`
+- Show the Llama Stack config already has the safety provider pre-staged.
 
-Apply:
+Activate:
 
 ```bash
-oc apply -f k8s/llamastack/configmap-stack-config-guardrails.yml
-oc delete pod -n triage-assistant -l app.kubernetes.io/instance=triage-llamastack
 oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-guard
 ```
 
-Two config changes, no code changes.
+One command, no Llama Stack restart, no code changes. Platform team pre-staged the capability, activation is config-only.
 
 ### The Attack, Blocked (2 min) — [SWITCH TO: Browser, fresh session]
 
