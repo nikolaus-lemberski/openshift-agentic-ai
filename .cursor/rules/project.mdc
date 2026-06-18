@@ -27,7 +27,7 @@ The Quarkus application is a **thin chat UI**. It calls Llama Stack's `/v1/respo
 |-------|-----------|---------|
 | Chat UI | Quarkus + WebSockets + REST Client | Thin UI, sends requests to Llama Stack `/v1/responses` |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP connectors, server-side agentic loop |
-| Model Serving | OpenShift AI 3.4 + vLLM | On-premise LLM hosting (Qwen 3.5 9B via S3/MinIO) |
+| Model Serving | OpenShift AI 3.4 + vLLM | On-premise LLM hosting (Qwen 3.5 9B via S3/SeaweedFS) |
 | Agent Tools | 3x Quarkus MCP Servers (Streamable HTTP) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift 4.16+ | Container orchestration |
 
@@ -44,12 +44,12 @@ ogx_configs/                OGX (Llama Stack) config files + Python venv (via uv
 compose.yaml                Podman/Docker Compose for local dev stack
 scripts/
   deploy.sh                 Full infrastructure deployment script
-  pull-model-to-minio.sh    Pull model weights into MinIO
+  pull-model.sh              Pull model weights into SeaweedFS
 k8s/
   namespace.yml             triage-assistant namespace
   model-serving/            ServingRuntime + InferenceService for vLLM on OpenShift AI
   llamastack/               ConfigMap + LlamaStackDistribution CR (inference + MCP connectors)
-  minio/                    MinIO S3 storage (deployment, PVC, secrets, model pull job)
+  seaweedfs/                SeaweedFS S3 storage (deployment, PVC, secrets, model pull job)
   apps/                     Application deployments, services, and routes
   openshift-ai/             OpenShift AI MCP server integration ConfigMap
 docs/                       Architecture, PRD, implementation plan, webinar script, local dev guide

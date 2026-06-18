@@ -11,7 +11,7 @@ metadata:
     opendatahub.io/hardware-profile-name: gpu-profile
     opendatahub.io/hardware-profile-namespace: redhat-ods-applications
     opendatahub.io/model-type: generative
-    openshift.io/display-name: "Qwen 3.5 9B"
+    openshift.io/display-name: "Qwen 3.5 9B FP8"
     security.opendatahub.io/enable-auth: "false"
     serving.kserve.io/deploymentMode: Standard
     serving.kserve.io/disableRouteCreation: "true"
@@ -43,4 +43,4 @@ spec:
         - --language-model-only
         - --enable-auto-tool-choice
         - --tool-call-parser=qwen3_xml
-        - --default-chat-template-kwargs={"enable_thinking":false}
+        - --reasoning-parser=qwen3

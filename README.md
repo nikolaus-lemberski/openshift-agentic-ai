@@ -48,12 +48,12 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 │   └── openshift-prod.yaml            # OGX config: vLLM + k8s service MCP servers
 ├── scripts/
 │   ├── deploy.sh                      # Full infrastructure deployment script
-│   └── pull-model-to-minio.sh         # Pull model weights into MinIO
+│   └── pull-model.sh                 # Pull model weights into SeaweedFS
 └── k8s/                               # OpenShift manifests
     ├── namespace.yml                  # triage-assistant namespace
     ├── model-serving/                 # ServingRuntime + InferenceService for vLLM
     ├── llamastack/                    # LlamaStackDistribution CR + stack config ConfigMap
-    ├── minio/                         # MinIO S3 storage (deployment, PVC, secrets, model pull job)
+    ├── seaweedfs/                     # SeaweedFS S3 storage (deployment, PVC, secrets, model pull job)
     ├── apps/                          # Application deployments, services, and routes
     └── openshift-ai/                  # OpenShift AI MCP server integration ConfigMap
 ```
@@ -64,7 +64,7 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 |-------|-----------|------|
 | Chat UI | Quarkus + WebSockets | Thin UI, delegates all AI to Llama Stack |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP tool execution, agentic loop (`/v1/responses`) |
-| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Qwen 3.5 9B via S3/MinIO) |
+| Model Serving | OpenShift AI + vLLM | On-premise LLM hosting (Qwen 3.5 9B via S3/SeaweedFS) |
 | Agent Tools | MCP Servers (Quarkus) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift | Container orchestration, GPU management |
 

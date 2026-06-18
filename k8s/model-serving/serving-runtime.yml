@@ -10,14 +10,14 @@ metadata:
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
     opendatahub.io/template-name: vllm-cuda-runtime-template
-    openshift.io/display-name: "Qwen 3.5 9B - vLLM"
+    openshift.io/display-name: "Qwen 3.5 9B FP8 - vLLM"
 spec:
   annotations:
     prometheus.io/path: /metrics
     prometheus.io/port: "8080"
   containers:
     - name: kserve-container
-      image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.3.1
+      image: vllm/vllm-openai:latest
       command:
         - python3
         - -m

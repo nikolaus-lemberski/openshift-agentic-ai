@@ -1,6 +1,6 @@
 # Model Serving - Qwen 3.5 9B
 
-Deploy vLLM model serving with S3/MinIO storage on OpenShift AI. The model is internal-only (no external Route) -- accessed by Llama Stack within the same namespace.
+Deploy vLLM model serving with S3/SeaweedFS storage on OpenShift AI. The model is internal-only (no external Route) -- accessed by Llama Stack within the same namespace.
 
 ## Hardware
 
@@ -11,17 +11,17 @@ Deploy vLLM model serving with S3/MinIO storage on OpenShift AI. The model is in
 
 - OpenShift 4.16+ with OpenShift AI 3.x installed
 - GPU node with at least 2x NVIDIA GPUs
-- MinIO deployed and model uploaded (see below)
+- SeaweedFS deployed and model uploaded (see below)
 - `oc` CLI logged in as cluster-admin
 
 ## Deployment
 
 ```bash
-# 1. Deploy MinIO
-oc apply -f k8s/minio/
+# 1. Deploy SeaweedFS
+oc apply -f k8s/seaweedfs/
 
-# 2. Pull model into MinIO (runs as a Job in-cluster)
-./scripts/pull-model-to-minio.sh
+# 2. Pull model into SeaweedFS (runs as a Job in-cluster)
+./scripts/pull-model.sh
 oc logs -f job/pull-qwen35-9b -n triage-assistant
 
 # 3. Deploy ServingRuntime and InferenceService
@@ -80,14 +80,14 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 | Additional flags | `--language-model-only`, `--gpu-memory-utilization=0.95` |
 | Tensor parallelism | 2 (across 2 GPUs) |
 | Shared memory | 12Gi |
-| Storage | MinIO S3: `s3://models/qwen3.5-9b` |
+| Storage | SeaweedFS S3: `s3://models/qwen3.5-9b` |
 | Namespace | `triage-assistant` |
 | Internal URL | `http://qwen35-9b-predictor:8080` |
 
 ## Notes
 
-- **S3/MinIO storage** -- model weights are pulled from HuggingFace via a Kubernetes Job and stored in a MinIO bucket within the cluster.
+- **S3/SeaweedFS storage** -- model weights are pulled from HuggingFace via a Kubernetes Job and stored in a SeaweedFS bucket within the cluster.
 - **Tensor parallel** -- the model is split across 2 GPUs; the serving runtime sets `--tensor-parallel-size=2`.
-- **Single namespace** -- all components (MinIO, model serving, Llama Stack, MCP servers, chat UI) live in `triage-assistant`.
+- **Single namespace** -- all components (SeaweedFS, model serving, Llama Stack, MCP servers, chat UI) live in `triage-assistant`.
 - **Internal only** -- `serving.kserve.io/disableRouteCreation: "true"` prevents external Route creation.
 - **No auth needed** -- traffic stays within the cluster network.

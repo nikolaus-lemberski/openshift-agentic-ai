@@ -24,36 +24,39 @@ echo "[1/1] Creating namespace '${NAMESPACE}'..."
 oc apply -f "${K8S_DIR}/namespace.yml"
 echo ""
 
-# ─── Phase 2: MinIO (S3-compatible model storage) ───────────────────────────
+# ─── Phase 2: SeaweedFS (S3-compatible model storage) ────────────────────────
 
-echo "=== Phase 2: MinIO ==="
+echo "=== Phase 2: SeaweedFS ==="
 echo ""
 
-echo "[1/5] Creating MinIO credentials secret..."
-oc apply -f "${K8S_DIR}/minio/secret.yml"
+echo "[1/6] Creating SeaweedFS S3 config secret..."
+oc apply -f "${K8S_DIR}/seaweedfs/secret-s3-config.yml"
 
-echo "[2/5] Creating model-serving ServiceAccount..."
-oc apply -f "${K8S_DIR}/minio/serviceaccount.yml"
+echo "[2/6] Creating SeaweedFS credentials secret..."
+oc apply -f "${K8S_DIR}/seaweedfs/secret.yml"
 
-echo "[3/5] Creating PersistentVolumeClaim..."
-oc apply -f "${K8S_DIR}/minio/pvc.yml"
+echo "[3/6] Creating model-serving ServiceAccount..."
+oc apply -f "${K8S_DIR}/seaweedfs/serviceaccount.yml"
 
-echo "[4/5] Deploying MinIO..."
-oc apply -f "${K8S_DIR}/minio/deployment.yml"
+echo "[4/6] Creating PersistentVolumeClaim..."
+oc apply -f "${K8S_DIR}/seaweedfs/pvc.yml"
 
-echo "[5/5] Creating MinIO Service..."
-oc apply -f "${K8S_DIR}/minio/service.yml"
+echo "[5/6] Deploying SeaweedFS..."
+oc apply -f "${K8S_DIR}/seaweedfs/deployment.yml"
+
+echo "[6/6] Creating SeaweedFS Service..."
+oc apply -f "${K8S_DIR}/seaweedfs/service.yml"
 
 echo ""
-echo "Waiting for MinIO to be ready..."
-oc rollout status deployment/minio -n "${NAMESPACE}" --timeout=120s
+echo "Waiting for SeaweedFS to be ready..."
+oc rollout status deployment/seaweedfs -n "${NAMESPACE}" --timeout=120s
 echo ""
 
 # ─── Phase 2b: HuggingFace Token ────────────────────────────────────────────
 
 if [ -n "${HF_TOKEN:-}" ]; then
   echo "[HF] Creating HuggingFace token secret from \$HF_TOKEN..."
-  envsubst < "${K8S_DIR}/minio/secret-hf-token.yml" | oc apply -f -
+  envsubst < "${K8S_DIR}/seaweedfs/secret-hf-token.yml" | oc apply -f -
   echo ""
 else
   echo "[HF] No \$HF_TOKEN set -- skipping HuggingFace token secret."
@@ -62,15 +65,15 @@ else
   echo ""
 fi
 
-# ─── Phase 3: Model Pull (HuggingFace → MinIO) ─────────────────────────────
+# ─── Phase 3: Model Pull (HuggingFace → SeaweedFS) ──────────────────────────
 
 echo "=== Phase 3: Model Pull ==="
 echo ""
-echo "Launching Job to download model from HuggingFace into MinIO..."
+echo "Launching Job to download model from HuggingFace into SeaweedFS..."
 echo ""
 
 oc delete job pull-qwen35-9b -n "${NAMESPACE}" --ignore-not-found
-oc apply -f "${K8S_DIR}/minio/job-pull-model.yml"
+oc apply -f "${K8S_DIR}/seaweedfs/job-pull-model.yml"
 
 echo ""
 echo "Waiting for model pull Job to complete (this may take 10-30 minutes)..."
@@ -145,7 +148,7 @@ echo ""
 
 echo "=== Phase 6: PromptGuard Model Pull ==="
 echo ""
-echo "Launching Job to download PromptGuard model from HuggingFace into MinIO..."
+echo "Launching Job to download PromptGuard model from HuggingFace into SeaweedFS..."
 echo "(protectai/deberta-v3-base-prompt-injection-v2 -- ungated, Apache 2.0)"
 echo ""
 
@@ -198,7 +201,7 @@ echo "============================================"
 echo ""
 echo "Deployed:"
 echo "  - Namespace:        ${NAMESPACE}"
-echo "  - MinIO:            minio.${NAMESPACE}.svc:9000"
+echo "  - SeaweedFS:        seaweedfs.${NAMESPACE}.svc:8333 (S3 API)"
 echo "  - Model:            ${ISVC_NAME} (vLLM)"
 echo "  - Llama Stack:      triage-llamastack.${NAMESPACE}.svc:8321"
 echo "  - PromptGuard:      promptguard-service.${NAMESPACE}.svc:8080"
