@@ -8,6 +8,10 @@
 
 45 minutes total: ~30 minutes presentation + live demo, ~15 minutes Q&A
 
+## Prerequisites
+
+Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: namespace, SeaweedFS, model weights, vLLM InferenceService, OGX (Llama Stack), and PromptGuard. The Quarkus applications are **not** deployed yet -- MCP servers and the triage assistant app are deployed live during the demo in separate steps.
+
 ---
 
 ## Act 1: Why Healthcare AI Needs This Stack (8 min)
@@ -44,13 +48,15 @@ Walk through each layer bottom-up:
 
 ---
 
-## Act 2: The AI Platform on OpenShift (10 min)
+## Act 2: What's Already Running (5 min)
 
-### Model Hosting on OpenShift AI (5 min)
+> "Before the webinar, I ran a deploy script that set up the AI infrastructure. Let me show you what's already running on this cluster."
+
+### Model Serving on OpenShift AI (3 min)
 
 **[SWITCH TO: OpenShift Console or terminal]**
 
-> "Let's start with the model. I have Qwen 3.5 9B deployed on OpenShift AI, served by vLLM. It's a 9-billion parameter model from the Qwen family, running across 2 GPUs with tensor parallelism."
+> "Let's start with the model. Qwen 3.5 9B is deployed on OpenShift AI, served by vLLM across 2 GPUs with tensor parallelism."
 
 **Show:**
 1. The OpenShift AI dashboard with the `InferenceService` in the `triage-assistant` project
@@ -61,24 +67,16 @@ NAME          READY   URL
 qwen35-9b     True    http://qwen35-9b-predictor.triage-assistant.svc.cluster.local:8080
 ```
 
-**Quick test (from a temp pod since it's internal-only):**
-```bash
-oc run curl-test -n triage-assistant --rm -it --restart=Never \
-  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://qwen35-9b-predictor.triage-assistant.svc.cluster.local:8080/v1/models
-# {"data":[{"id":"qwen35-9b",...}]}
-```
+> "The model is internal-only -- no external Route, accessible only within the cluster. Patient data never leaves the cluster."
 
-> "The model is internal-only -- no external Route, accessible only within the cluster. Llama Stack connects to it via the Kubernetes Service URL. Patient data never leaves the cluster."
+> "The model weights are stored in a SeaweedFS S3 bucket within the cluster. We pulled the Qwen 3.5 9B weights from HuggingFace and uploaded them there, then the InferenceService pulls from S3. Everything stays inside the cluster."
 
-> "The model weights are stored in a MinIO S3 bucket within the cluster. We pulled the Qwen 3.5 9B weights from HuggingFace and uploaded them to MinIO, then the InferenceService pulls from there. Everything stays inside the cluster."
-
-### Llama Stack via Operator (5 min)
+### OGX (Llama Stack) via Operator (2 min)
 
 **Show:**
-1. The `LlamaStackDistribution` CR YAML
+1. The `LlamaStackDistribution` CR
 
-> "Now let's look at Llama Stack. This is the custom resource that the Llama Stack Operator manages. And this is where it gets interesting."
+> "And here's Llama Stack -- or OGX, the OpenShift GenAI eXchange. This is the custom resource that the Llama Stack Operator manages."
 
 ```bash
 oc get llamastackdistribution -n triage-assistant
@@ -86,11 +84,9 @@ oc get llamastackdistribution -n triage-assistant
 # triage-llamastack     True
 ```
 
-**Show the ConfigMap content (highlight BOTH inference provider and connectors):**
+**Show the ConfigMap content (highlight the inference provider):**
 
-> "Two things to notice. First, the inference provider: `remote::vllm` pointing at our Qwen 3.5 9B InferenceService. Second -- and this is new if you've only seen Llama Stack as a gateway -- the **connectors** section. Three MCP servers are registered here: patient records, medical knowledge, and scheduling. Llama Stack will discover their tools and execute them server-side during the agentic loop."
-
-> "The application doesn't know about any of this. It just calls `/v1/responses` with the model name and a list of connector IDs. Llama Stack handles everything else."
+> "Notice the inference provider: `remote::vllm` pointing at our Qwen 3.5 9B InferenceService. Llama Stack routes all inference requests through here. It also has MCP connectors configured -- but those MCP servers aren't running yet. They're part of the application layer, which we'll deploy next."
 
 **Quick test:**
 ```bash
@@ -100,17 +96,113 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 # {"data":[{"id":"qwen-vllm/qwen35-9b",...}]}
 ```
 
-> "Qwen 3.5 9B accessible through Llama Stack. And behind the scenes, three MCP servers registered and ready."
+> "Qwen 3.5 9B is accessible through Llama Stack. The infrastructure layer is ready. Now let's look at the applications."
 
 ---
 
-## Act 3: The Agent Helps a Nurse (15 min)
+## Act 3: The MCP Servers -- Team 1 (5 min)
 
-### Quick Code Tour (3 min)
+**[SWITCH TO: IDE showing the Quarkus projects]**
 
-**[SWITCH TO: IDE showing the Quarkus project]**
+> "Let's look at the first team's work: the MCP server team. They build and expose hospital systems as tools using the Model Context Protocol. Let me show you the code -- notice how little there is."
 
-> "Before we run the demo, let me show you the code. And I want you to notice how little there is."
+### The Code (3 min)
+
+**Show one MCP server (`PatientRecordsMcpServer.java`):**
+
+> "Here's what an MCP server looks like in Quarkus. A Java class with `@Tool` annotations. Each method becomes a tool that Llama Stack discovers and executes. This one searches patients and retrieves medical histories. For the demo it's backed by sample data, but in production it would call the hospital's EHR API."
+
+> "Notice: this MCP server doesn't know who's calling it. It could be Llama Stack, it could be another MCP client, it could be an IDE plugin. That's the beauty of MCP -- it's a standard."
+
+> "We have three of these: patient records, medical knowledge for triage assessment and drug interactions, and appointment scheduling."
+
+### Deploying (2 min)
+
+**[SWITCH TO: Terminal]**
+
+> "Let's deploy the MCP servers. The MCP server team delivers these independently -- they don't need to wait for the application team."
+
+```bash
+oc apply -f k8s/apps/mcp-servers/
+```
+
+> "One command. Three MCP servers deploying in parallel: patient records, medical knowledge, and scheduling."
+
+**Wait for rollout:**
+```bash
+oc rollout status deployment/mcp-patient-records -n triage-assistant --timeout=120s
+oc rollout status deployment/mcp-medical-knowledge -n triage-assistant --timeout=120s
+oc rollout status deployment/mcp-scheduling -n triage-assistant --timeout=120s
+```
+
+**Show the running pods:**
+```bash
+oc get pods -n triage-assistant -l 'app in (mcp-patient-records, mcp-medical-knowledge, mcp-scheduling)'
+```
+
+> "All three MCP servers are running. Now the platform team can pick these up immediately -- even if the application team is still developing."
+
+---
+
+## Act 4: Registering MCP Servers in OpenShift AI (2 min)
+
+**[SWITCH TO: Terminal]**
+
+> "OpenShift AI has a feature for managing MCP servers centrally. We register them via a ConfigMap in the `redhat-ods-applications` namespace."
+
+**Show the ConfigMap YAML briefly:**
+
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: gen-ai-aa-mcp-servers
+  namespace: redhat-ods-applications
+data:
+  Patient-Records-MCP-Server: |
+    {
+      "url": "http://mcp-patient-records.triage-assistant.svc.cluster.local:8080/mcp",
+      "description": "Patient Records MCP server provides access to patient demographic information..."
+    }
+  Medical-Knowledge-MCP-Server: |
+    ...
+  Scheduling-MCP-Server: |
+    ...
+```
+
+> "Each entry is an MCP server with its cluster-internal URL and a description. Let's apply it."
+
+```bash
+oc apply -f k8s/openshift-ai/gen-ai-aa-mcp-servers.yml
+```
+
+> "Done. Now let's go back to OpenShift AI and see what changed."
+
+---
+
+## Act 5: OpenShift AI GenAI Playground (3 min)
+
+**[SWITCH TO: OpenShift AI Dashboard]**
+
+> "Now look at this. The MCP servers are visible in OpenShift AI. Patient Records, Medical Knowledge, Scheduling -- all registered and discoverable."
+
+**Navigate to the GenAI Playground in OpenShift AI. Show the MCP servers listed.**
+
+> "This is the OpenShift AI GenAI Playground. It lets platform teams and developers interact with models and tools directly from the dashboard -- no application needed. You can select a model, attach MCP servers, and have a conversation right here."
+
+> "This is the key insight for multi-team workflows: the MCP server team has deployed their tools, the platform has registered them, and anyone can test them right now -- even if the application team hasn't shipped their UI yet. The platform provides the playground. Teams can work independently."
+
+> "But we do have a purpose-built application. Let's look at what the application team built."
+
+---
+
+## Act 6: The Triage Assistant -- Team 2 (4 min)
+
+### The Code (2 min)
+
+**[SWITCH TO: IDE]**
+
+> "Now let's look at the application team's work. They build the end-user experience -- a chat UI for triage nurses."
 
 **Show `TriageService.java`:**
 
@@ -118,13 +210,33 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 
 **Show `application.properties`:**
 
-> "The configuration: one URL to Llama Stack, a model name, and the system prompt. No MCP server URLs -- those are configured in Llama Stack, not here. The application is decoupled from both the models and the tools."
+> "The configuration: one URL to Llama Stack, a model name, and the system prompt. No MCP server URLs -- those are configured in Llama Stack, not here. The application is completely decoupled from both the models and the tools. The app team doesn't need to know how the MCP servers are implemented or where they run."
 
-**Show one MCP server (`PatientRecordsMcpServer.java`):**
+### Deploying (2 min)
 
-> "And here's what an MCP server looks like in Quarkus. A Java class with `@Tool` annotations. Each method becomes a tool that Llama Stack discovers and executes. This one searches patients and retrieves medical histories. For the demo it's backed by sample data, but in production it would call the hospital's EHR API."
+**[SWITCH TO: Terminal]**
 
-> "Notice: this MCP server doesn't know who's calling it. It could be Llama Stack, it could be another MCP client, it could be an IDE plugin. That's the beauty of MCP -- it's a standard."
+> "Let's deploy the triage assistant."
+
+```bash
+oc apply -f k8s/apps/triage-assistant/
+```
+
+**Wait for rollout:**
+```bash
+oc rollout status deployment/triage-assistant -n triage-assistant --timeout=120s
+```
+
+**Show all pods:**
+```bash
+oc get pods -n triage-assistant
+```
+
+> "The triage assistant is running. It connects to Llama Stack, which connects to the model and discovers the MCP tools. Two teams, working independently, both leveraging the same platform. Let's see it in action."
+
+---
+
+## Act 7: The Triage Workflow (12 min)
 
 ### Interaction 1: Patient Lookup (4 min)
 
@@ -179,59 +291,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 
 ---
 
-## Act 4: The Model-Agnostic Story (5 min)
-
-### Set the Scene (2 min)
-
-> "Everything you just saw was running on Qwen 3.5 9B -- a capable model from the Qwen family, served via vLLM. But here's the key point about this architecture: the application doesn't know or care which model is behind Llama Stack."
-
-> "In most architectures, switching from one model vendor to another is a project. Different tokenizer, different prompt format, maybe different API. Not here. In Llama Stack, you change the inference provider in the ConfigMap. The application never changes."
-
-### Explain the Architecture (3 min)
-
-**[SWITCH TO: Terminal or slides]**
-
-**Show the Llama Stack ConfigMap:**
-```yaml
-providers:
-  inference:
-    - provider_id: qwen-vllm
-      provider_type: remote::vllm
-      config:
-        base_url: http://qwen35-9b-predictor:8080/v1
-```
-
-> "To switch to a different model -- say Granite for IBM alignment, or Llama for Meta's latest -- you deploy a new InferenceService, update this URL in the ConfigMap, and restart Llama Stack. The application keeps calling the same endpoint. Zero code changes. Zero redeployments."
-
-> "On our cluster we have 2 GPUs dedicated to model serving. But the architecture supports multiple models on larger clusters. Llama Stack can route to multiple inference providers. The platform team controls which model serves the application -- the AI safety committee decides, the ops team executes, the application team doesn't need to be involved."
-
-> "This is what model-agnostic middleware gives you: zero vendor lock-in. Today it's Qwen. Tomorrow it could be Granite, Llama, Mistral, or whatever the next state-of-the-art model is. The application is decoupled from the model layer entirely."
-
----
-
-## Act 5: The Full Middleware Story (3 min)
-
-> "Let me step back and show you the big picture of what we've built."
-
-**[SLIDE: Governance summary]**
-
-> "In this architecture, the Quarkus application is intentionally thin. It knows one thing: where Llama Stack is, and what system prompt to use. Everything else -- which model to use, which tools the agent can access, how the agentic loop runs -- is governed by Llama Stack."
-
-| What changes | Who does it | How | App impact |
-|-------------|-------------|-----|------------|
-| Swap AI model | Platform team | Update Llama Stack ConfigMap + restart | None |
-| Add new tool (e.g., lab results MCP) | Platform team | Add connector in Llama Stack config | None (or add connector ID to tools list) |
-| Remove tool access | Platform team | Remove connector | None |
-| Change system prompt | App team | Update `application.properties` | Config-only restart |
-| Change UI layout | App team | Update HTML/CSS | Code change |
-
-> "Model governance AND tool governance are platform operations. The AI safety committee decides. The ops team executes. The application team doesn't need to be involved."
-
-> "This is what enterprise AI middleware should look like. Not a thin proxy. Not a framework inside your app. A server-side orchestrator that handles inference, tools, and the agentic loop -- governed through Kubernetes-native resources."
-
----
-
-## Act 6: Guardrails -- Securing the Agent (7 min)
+## Act 8: Guardrails -- Securing the Agent (7 min)
 
 ### The Attack (3 min)
 
@@ -310,7 +370,7 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-
 
 ---
 
-## Act 7: Wrap-up and Key Takeaways (2 min)
+## Act 9: Wrap-up and Key Takeaways (3 min)
 
 **[SLIDE: Key Takeaways]**
 
@@ -322,7 +382,11 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-
 
 4. **The application is intentionally thin.** The Quarkus chat UI makes one REST call per user message. No MCP client logic. No agentic loop. All orchestration is delegated to the middleware.
 
-5. **Guardrails are a platform operation.** PromptGuard detects prompt injection and jailbreak attacks before they reach the model. Enabling it is a ConfigMap change -- no application code changes. Security controls are managed by the platform team, not the application team.
+5. **OpenShift AI provides platform governance.** MCP servers registered in OpenShift AI give the platform team visibility and control. The GenAI Playground lets teams prototype and audit agentic workflows without writing code.
+
+6. **Guardrails are a platform operation.** PromptGuard detects prompt injection and jailbreak attacks before they reach the model. Enabling it is a config change -- no application code changes. Security controls are managed by the platform team, not the application team.
+
+7. **Zero vendor lock-in.** The app doesn't know or care which model is behind Llama Stack. Switching from Qwen to Granite, Llama, or Mistral is a ConfigMap change + restart. No code changes. No redeployments.
 
 > "This architecture applies to any regulated industry -- financial services, government, defense -- anywhere you need data sovereignty, model governance, and enterprise integration. The stack is the same."
 
@@ -358,3 +422,6 @@ A: You could, and it would work. But then MCP tool management is in the applicat
 
 **Q: Can the agent access tools that aren't registered in Llama Stack?**
 A: The app sends connector IDs in the `/v1/responses` request. Only connectors that are registered in Llama Stack config are available. This is a security feature: the platform team controls which tools the agent can use.
+
+**Q: What's the GenAI Playground in OpenShift AI?**
+A: It's a built-in interface in OpenShift AI that lets you interact with models and MCP tools directly from the dashboard. You can select a model, attach registered MCP servers, and test agentic workflows without writing an application. It's useful for prototyping, debugging, and compliance auditing.

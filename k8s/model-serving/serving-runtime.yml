@@ -17,7 +17,7 @@ spec:
     prometheus.io/port: "8080"
   containers:
     - name: kserve-container
-      image: vllm/vllm-openai:latest
+      image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.4.0
       command:
         - python3
         - -m
@@ -26,7 +26,7 @@ spec:
         - --port=8080
         - --model=/mnt/models
         - --served-model-name={{.Name}}
-        - --tensor-parallel-size=2
+        - --tensor-parallel-size=1
       env:
         - name: HOME
           value: /tmp
@@ -40,6 +40,8 @@ spec:
           value: /tmp/torch_cache
         - name: USER
           value: vllm
+        - name: VLLM_ENGINE_ITERATION_TIMEOUT_S
+          value: "300"
       ports:
         - containerPort: 8080
           protocol: TCP

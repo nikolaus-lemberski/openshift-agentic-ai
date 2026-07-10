@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: triage-llamastack-config
   namespace: triage-assistant
+  labels:
+    app.kubernetes.io/part-of: triage-assistant
 data:
   config.yaml: |
     version: '2'

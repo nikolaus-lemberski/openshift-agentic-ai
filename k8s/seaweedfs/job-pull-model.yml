@@ -60,6 +60,25 @@ data:
         s3.upload_file(str(file_path), BUCKET, key)
 
     print()
+    print("[3b/3] Patching tokenizer_config.json for vLLM compatibility...")
+    import json
+    tokenizer_key = f"{BUCKET_PATH}/tokenizer_config.json"
+    obj = s3.get_object(Bucket=BUCKET, Key=tokenizer_key)
+    tokenizer_config = json.loads(obj["Body"].read())
+    if tokenizer_config.get("tokenizer_class") == "TokenizersBackend":
+        tokenizer_config["tokenizer_class"] = "PreTrainedTokenizerFast"
+        tokenizer_config.pop("backend", None)
+        s3.put_object(
+            Bucket=BUCKET,
+            Key=tokenizer_key,
+            Body=json.dumps(tokenizer_config, indent=2),
+            ContentType="application/json",
+        )
+        print("  Patched: tokenizer_class TokenizersBackend -> PreTrainedTokenizerFast")
+    else:
+        print(f"  No patch needed (tokenizer_class={tokenizer_config.get('tokenizer_class')})")
+
+    print()
     print(f"=== Done! Model available at s3://{BUCKET}/{BUCKET_PATH}/ ===")
 ---
 apiVersion: batch/v1

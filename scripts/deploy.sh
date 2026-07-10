@@ -121,24 +121,27 @@ else
   echo ""
 fi
 
-# ─── Phase 5: Llama Stack ──────────────────────────────────────────────────
+# ─── Phase 5: OGX (Llama Stack) ────────────────────────────────────────────
 
-echo "=== Phase 5: Llama Stack ==="
+echo "=== Phase 5: OGX (Llama Stack) ==="
 echo ""
 
-echo "[1/2] Applying Llama Stack ConfigMap..."
+echo "[1/3] Applying OGX ConfigMap..."
 oc apply -f "${K8S_DIR}/llamastack/configmap-stack-config.yml"
 
-echo "[2/2] Deploying LlamaStackDistribution..."
+echo "[2/3] Deploying LlamaStackDistribution..."
 oc apply -f "${K8S_DIR}/llamastack/llamastack-distribution.yml"
 
+echo "[3/3] Creating LlamaStack Service..."
+oc apply -f "${K8S_DIR}/llamastack/service.yml"
+
 echo ""
-echo "Waiting for Llama Stack pod to be ready..."
+echo "Waiting for OGX pod to be ready..."
 oc wait --for=condition=Ready pod \
   -l app.kubernetes.io/instance=triage-llamastack \
   -n "${NAMESPACE}" --timeout=120s || {
   echo ""
-  echo "WARNING: Llama Stack pod did not become ready within 120s."
+  echo "WARNING: OGX pod did not become ready within 120s."
   echo "Check status: oc get pods -n ${NAMESPACE} -l app.kubernetes.io/instance=triage-llamastack"
   echo ""
 }
@@ -193,6 +196,47 @@ oc rollout status deployment/promptguard-service -n "${NAMESPACE}" --timeout=300
 }
 echo ""
 
+# ─── Phase 8: OpenShift AI Gateway Timeout ────────────────────────────────
+
+echo "=== Phase 8: OpenShift AI Gateway Timeout ==="
+echo ""
+echo "Configuring route timeouts for LLM inference (default 30s is too low"
+echo "for Qwen 3.5 thinking mode which can take 60-120s+)..."
+echo ""
+
+echo "[1/2] Annotating data-science-gateway route (300s timeout)..."
+oc annotate route data-science-gateway \
+  -n redhat-ods-applications \
+  haproxy.router.openshift.io/timeout=300s \
+  --overwrite
+
+echo "[2/2] Annotating rhods-dashboard route (300s timeout)..."
+oc annotate route rhods-dashboard \
+  -n redhat-ods-applications \
+  haproxy.router.openshift.io/timeout=300s \
+  --overwrite
+
+echo ""
+
+# ─── Phase 9: GenAI Playground Token Budget ───────────────────────────────
+
+echo "=== Phase 9: GenAI Playground Token Budget ==="
+echo ""
+echo "Increasing VLLM_MAX_TOKENS for the GenAI playground (Qwen 3.5 thinking"
+echo "mode consumes many tokens on reasoning before producing visible output)..."
+echo ""
+
+if oc get llamastackdistribution lsd-genai-playground -n "${NAMESPACE}" &>/dev/null; then
+  oc patch llamastackdistribution lsd-genai-playground -n "${NAMESPACE}" \
+    --type='json' \
+    -p='[{"op":"replace","path":"/spec/server/containerSpec/env","value":[{"name":"VLLM_TLS_VERIFY","value":"false"},{"name":"MILVUS_DB_PATH","value":"~/.llama/milvus.db"},{"name":"FMS_ORCHESTRATOR_URL","value":"http://localhost"},{"name":"VLLM_MAX_TOKENS","value":"8192"},{"name":"VLLM_API_TOKEN_1","value":"fake"},{"name":"LLAMA_STACK_CONFIG_DIR","value":"/opt/app-root/src/.llama/distributions/rh/"}]}]'
+  echo "  Patched: VLLM_MAX_TOKENS 4096 -> 8192"
+else
+  echo "  GenAI playground LlamaStackDistribution not found (created via RHOAI UI)."
+  echo "  Skipping -- apply manually after creating the playground connection."
+fi
+echo ""
+
 # ─── Summary ────────────────────────────────────────────────────────────────
 
 echo "============================================"
@@ -203,13 +247,19 @@ echo "Deployed:"
 echo "  - Namespace:        ${NAMESPACE}"
 echo "  - SeaweedFS:        seaweedfs.${NAMESPACE}.svc:8333 (S3 API)"
 echo "  - Model:            ${ISVC_NAME} (vLLM)"
-echo "  - Llama Stack:      triage-llamastack.${NAMESPACE}.svc:8321 (safety provider pre-registered)"
+echo "  - OGX (Llama Stack): triage-llamastack.${NAMESPACE}.svc:8321 (safety provider pre-registered)"
 echo "  - PromptGuard:      promptguard-service.${NAMESPACE}.svc:8080 (dormant until activated)"
+echo "  - Route timeout:    300s on data-science-gateway and rhods-dashboard"
+echo "  - GenAI playground: VLLM_MAX_TOKENS=8192 (if playground exists)"
 echo ""
 echo "Next steps:"
-echo "  1. Deploy the apps (MCP servers + Chat UI):"
-echo "       oc apply -f k8s/apps/"
+echo "  1. Deploy the MCP servers:"
+echo "       oc apply -f k8s/apps/mcp-servers/"
+echo "  2. Register MCP servers in OpenShift AI:"
+echo "       oc apply -f k8s/openshift-ai/gen-ai-aa-mcp-servers.yml"
+echo "  3. Deploy the triage assistant app:"
+echo "       oc apply -f k8s/apps/triage-assistant/"
 echo ""
-echo "  2. To activate guardrails during the demo:"
+echo "  4. To activate guardrails during the demo:"
 echo "       oc set env deployment/triage-assistant -n ${NAMESPACE} GUARDRAIL_IDS=prompt-guard"
 echo ""

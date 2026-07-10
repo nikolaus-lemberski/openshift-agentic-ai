@@ -31,11 +31,11 @@ spec:
         requests:
           cpu: "4"
           memory: 24Gi
-          nvidia.com/gpu: "2"
+          nvidia.com/gpu: "1"
         limits:
           cpu: "8"
           memory: 32Gi
-          nvidia.com/gpu: "2"
+          nvidia.com/gpu: "1"
       args:
         - --dtype=auto
         - --max-model-len=16384
@@ -43,4 +43,4 @@ spec:
         - --language-model-only
         - --enable-auto-tool-choice
         - --tool-call-parser=qwen3_xml
-        - --reasoning-parser=qwen3
+        - --trust-remote-code
