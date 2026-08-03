@@ -9,22 +9,28 @@
 
 ## Act 1: Why Healthcare AI Needs This Stack (8 min)
 
-### Opening (3 min) -- [SLIDE: Title slide]
+### Opening (3 min) -- [SLIDE 1: Title] + [SLIDE 2: Das Projekt]
 
 - We're building an AI triage assistant for patient intake: record lookup, symptom triage, drug interactions, specialist booking -- all through natural language.
 - Healthcare means HIPAA: patient data cannot leave hospital infrastructure. We host our own models and connect to internal systems behind the firewall.
+- Fully on-premise, open-source stack, no vendor lock-in. Models, tools, and guardrails are platform operations -- no application code changes.
 - Llama Stack handles everything server-side (model routing, tool execution, agentic loop). The application is just a chat window.
 
-### Architecture Walkthrough (5 min) -- [SLIDE: Architecture diagram]
+### Tech Stack (2 min) -- [SLIDE 3: Der Stack]
 
-Bottom-up:
+Three building blocks:
 
-1. **OpenShift AI + vLLM** -- Qwen 3.5 9B, 2 GPUs with tensor parallelism, internal-only.
-2. **MCP Servers** -- 3 Quarkus microservices (patient records, medical knowledge, scheduling) exposing hospital systems via Model Context Protocol.
-3. **Llama Stack (OGX)** -- Middleware brain. One endpoint: `/v1/responses`. Runs the full agentic loop server-side: inference -> tool calls via MCP -> re-inference -> final answer.
-4. **Quarkus Chat UI** -- Thin WebSocket app. Sends message to Llama Stack, renders response. No MCP client code, no agentic loop logic.
+1. **vLLM on OpenShift AI** -- Qwen 3.5 9B as InferenceService CR. Tensor parallelism across 2 GPUs, cluster-internal only. OpenAI-compatible API -- model-agnostic.
+2. **Llama Stack / OGX** -- `POST /v1/responses`. Entire agentic loop runs server-side. Model routing, MCP connectors, and guardrails as config. Deployed via Operator.
+3. **MCP Servers** -- Open standard for tool discovery. Three Quarkus MCP servers: patient records, medical knowledge, scheduling. Composable via Streamable HTTP.
 
-**Key message:** Platform team controls models AND tools through K8s resources and Llama Stack config. Swapping a model = `oc apply`. Adding a tool = config change. No PRs, no CI/CD, no redeployments.
+### Architecture Walkthrough (3 min) -- [SLIDE 4: Architecture diagram]
+
+Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to Llama Stack -> PromptGuard (input shield) -> vLLM inference -> MCP tool execution -> re-inference -> final answer.
+
+**Key message:** The app sends one request, Llama Stack delivers the final answer. All tool calls run server-side. Platform team controls models AND tools through K8s resources and Llama Stack config. Swapping a model = `oc apply`. Adding a tool = config change. No PRs, no CI/CD, no redeployments.
+
+### Transition -- [SLIDE 5: Demo Time!]
 
 ---
 
@@ -35,7 +41,7 @@ Bottom-up:
 ### Model Serving (3 min) -- [SWITCH TO: OpenShift Console / terminal]
 
 - Show the InferenceService: `oc get inferenceservices -n triage-assistant`
-- Model is internal-only, no external Route. Weights stored in SeaweedFS S3 within the cluster.
+- Model is internal-only, no external Route. Weights distributed as a ModelCar OCI image.
 
 ### OGX / Llama Stack (2 min)
 
@@ -206,7 +212,9 @@ Three defense layers: model safety training, system prompt guardrails, PromptGua
 
 ---
 
-## Act 9: Wrap-up (3 min) -- [SLIDE: Key Takeaways]
+## Act 9: Wrap-up (3 min) -- verbal, no slides
+
+Key takeaways (delivered verbally):
 
 1. **Data stays on-premise.** OpenShift AI hosts models inside hospital infrastructure. Patient data never leaves the cluster.
 2. **Llama Stack is full middleware.** Model routing, MCP tool execution, server-side agentic loop. Model AND tool switching are platform ops.

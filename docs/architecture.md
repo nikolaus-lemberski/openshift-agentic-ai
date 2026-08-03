@@ -82,7 +82,7 @@ graph TD
 |-------|------|---------------|
 | Qwen 3.5 9B | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | 2x NVIDIA GPUs with tensor-parallel-size=2 |
 
-The model weights are served from a MinIO S3 bucket (`s3://models/qwen3.5-9b`) within the cluster. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
+The model weights are distributed as a ModelCar OCI image (`oci://quay.io/nlembers/qwen35-9b-fp8-modelcar:latest`), pulled directly by KServe from the container registry. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
 
 Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by deploying a new InferenceService and updating the Llama Stack provider config.
 

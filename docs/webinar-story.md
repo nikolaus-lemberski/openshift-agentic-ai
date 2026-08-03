@@ -10,7 +10,7 @@
 
 ## Prerequisites
 
-Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: namespace, SeaweedFS, model weights, vLLM InferenceService, OGX (Llama Stack), and PromptGuard. The Quarkus applications are **not** deployed yet -- MCP servers and the triage assistant app are deployed live during the demo in separate steps.
+Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: namespace, vLLM InferenceService (model weights via ModelCar OCI image), OGX (Llama Stack), and PromptGuard. The Quarkus applications are **not** deployed yet -- MCP servers and the triage assistant app are deployed live during the demo in separate steps.
 
 ---
 
@@ -18,33 +18,47 @@ Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: nam
 
 ### Opening (3 min)
 
-**[SLIDE: Title slide]**
+**[SLIDE 1: Title]**
 
 > "Today we're going to build something real. Not a chatbot that answers trivia -- an AI agent that helps a triage nurse save time during patient intake. It can look up medical records, assess how urgent a patient's symptoms are, check for drug interactions, and book specialist appointments. All through natural language."
 
 > "But here's the catch: this is healthcare. We can't just call OpenAI's API. Patient data -- symptoms, medications, medical history -- is Protected Health Information under HIPAA. It cannot leave the hospital's infrastructure. Ever."
 
+**[SLIDE 2: Das Projekt]**
+
 > "So we need to host our own models, govern which models are approved for clinical use, and connect the AI agent to the hospital's internal systems -- the EHR, the scheduling system, the clinical knowledge base. These are all behind the firewall."
 
-> "And here's what makes this different from most agentic AI demos you've seen: we're not going to wire all of this together in application code. We're going to let Llama Stack -- our AI middleware -- handle everything: model routing, tool execution, the agentic loop. The application is just a chat window."
+> "Everything stays on-premise. The entire stack is open source -- no vendor lock-in. And here's the key: models, tools, and guardrails are all platform-managed. Adding a tool, swapping a model, enabling a guardrail -- these are platform operations, not code changes."
 
-> "That's what today is about. Let me show you the stack."
+> "And the agent is truly agentic, not just a chatbot. It calls tools autonomously, chains results together. One message triggers the complete workflow."
 
-### Architecture Walkthrough (5 min)
+### Tech Stack Overview (2 min)
 
-**[SLIDE: Architecture diagram]**
+**[SLIDE 3: Der Stack]**
 
-Walk through each layer bottom-up:
+> "Let me show you the three building blocks."
 
-1. **OpenShift AI + vLLM** -- "Our model runs here. Inside the hospital's data center, on the hospital's GPUs. We're running Qwen 3.5 9B -- a capable model from the Qwen family, served by vLLM with tensor parallelism across 2 GPUs. It has excellent tool-calling capabilities."
+1. **vLLM on OpenShift AI** -- "Our model runs here. Qwen 3.5 9B as an InferenceService CR. Tensor parallelism across 2 GPUs, cluster-internal only. It exposes an OpenAI-compatible API, so the system is model-agnostic."
 
-2. **MCP Servers** -- "These are the agent's hands. Three Quarkus microservices exposing hospital systems as MCP tools: patient records, medical knowledge, and appointment scheduling. They speak the Model Context Protocol -- an open standard for tool integration."
+2. **Llama Stack / OGX** -- "This is the brain of the system. Not the application -- the *middleware*. One endpoint: `POST /v1/responses`. The entire agentic loop runs server-side: model routing, MCP connectors, and guardrails -- all as config. Deployed via the Llama Stack Operator."
 
-3. **Llama Stack (OGX) via Operator** -- "This is the brain of the system. Not the application -- the *middleware*. Llama Stack provides one endpoint: `/v1/responses`. When our app sends a user message, Llama Stack runs the entire agentic loop server-side: it routes inference to the right model, the model decides which tools to call, Llama Stack executes those tools via MCP, feeds the results back to the model, and repeats until it has a final answer. All inside the cluster."
+3. **MCP Servers** -- "These are the agent's hands. An open standard for tool discovery. Three Quarkus MCP servers: patient records, medical knowledge, and scheduling. Composable via Streamable HTTP."
 
-4. **Quarkus Chat UI** -- "And this is the application. It's intentionally thin. A WebSocket chat page that sends the nurse's message to Llama Stack and renders the response. No MCP client code. No agentic loop logic. Just a REST call."
+### Architecture Walkthrough (3 min)
+
+**[SLIDE 4: Architecture diagram]**
+
+> "Here's the data flow. The nurse types a message. The Quarkus Chat UI sends it to Llama Stack via `POST /v1/responses`. Llama Stack runs the input through PromptGuard for injection detection, routes inference to vLLM, the model decides which tools to call, Llama Stack executes those tools via MCP -- all inside the cluster -- feeds the results back to the model, and repeats until it has a final answer."
+
+> "The app sends one request and gets back the final answer. All tool calls run server-side. Patient data never leaves the cluster -- not even during tool execution."
 
 **Key message:** "The governance story is what makes this real. The platform team controls which models AND which tools the agent can use -- through Kubernetes custom resources and Llama Stack config. The application team builds the UI. Swapping a model is an `oc apply`. Adding a new tool is a config change. No PRs, no CI/CD, no redeployments."
+
+### Transition
+
+**[SLIDE 5: Demo Time!]**
+
+> "Enough slides. Let me show you the real thing."
 
 ---
 
@@ -69,7 +83,7 @@ qwen35-9b     True    http://qwen35-9b-predictor.triage-assistant.svc.cluster.lo
 
 > "The model is internal-only -- no external Route, accessible only within the cluster. Patient data never leaves the cluster."
 
-> "The model weights are stored in a SeaweedFS S3 bucket within the cluster. We pulled the Qwen 3.5 9B weights from HuggingFace and uploaded them there, then the InferenceService pulls from S3. Everything stays inside the cluster."
+> "The model weights are packaged as a ModelCar OCI image -- just like any container image -- and pulled directly from the registry. No separate storage layer needed. Everything stays inside the cluster."
 
 ### OGX (Llama Stack) via Operator (2 min)
 
@@ -372,7 +386,9 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-
 
 ## Act 9: Wrap-up and Key Takeaways (3 min)
 
-**[SLIDE: Key Takeaways]**
+*No slides -- verbal wrap-up delivered from the demo terminal/browser.*
+
+> "Let me quickly summarize what we've seen."
 
 1. **Data stays on-premise.** OpenShift AI hosts the models inside the hospital's infrastructure. Patient data never leaves the cluster -- not even during tool execution, because Llama Stack runs tools server-side.
 
