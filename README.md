@@ -1,8 +1,6 @@
 # Agentic AI in regulated environments: with OGX (Llama Stack), Quarkus, and OpenShift AI
 
-RHPDS: https://catalog.demo.redhat.com/catalog/all?search=OpenShift+AI+3&item=babylon-catalog-prod%2Fpublished.openshift-ai-v3.prod
 GPU: g6.12xlarge
-Campaign ID: 701Pe00000tj4MLIAY
 
 ## Abstract
 
