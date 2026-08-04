@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REGISTRY=quay.io
-USERNAME=$USERNAME
+USERNAME=nlembers
 PREFIX="agentic-ai-webinar-2026"
 TAG="${1:-latest}"
 
