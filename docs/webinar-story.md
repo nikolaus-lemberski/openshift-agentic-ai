@@ -103,14 +103,34 @@ oc get llamastackdistribution -n triage-assistant
 > "Notice the inference provider: `remote::vllm` pointing at our Qwen 3.5 9B InferenceService. Llama Stack routes all inference requests through here. It also has MCP connectors configured -- but those MCP servers aren't running yet. They're part of the application layer, which we'll deploy next."
 
 **Quick test:**
+
+> "Let's port-forward straight to Llama Stack so we can hit it from our own terminal."
+
 ```bash
-oc run curl-test -n triage-assistant --rm -it --restart=Never \
-  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://triage-llamastack-service:8321/v1/models
+oc port-forward -n triage-assistant svc/triage-llamastack-service 8321:8321 &
+```
+
+```bash
+curl -s http://localhost:8321/v1/models
 # {"data":[{"id":"qwen-vllm/qwen35-9b",...}]}
 ```
 
-> "Qwen 3.5 9B is accessible through Llama Stack. The infrastructure layer is ready. Now let's look at the applications."
+> "Qwen 3.5 9B is registered. But that just proves the model is known to Llama Stack -- let's prove it can actually think. One more call, straight through `/v1/responses`, no tools involved."
+
+```bash
+curl -s http://localhost:8321/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model": "qwen-vllm/qwen35-9b", "input": "Say hello in one short sentence."}'
+# {"output":[{"content":[{"text":"Hello! How can I assist you today?"}]}], ...}
+```
+
+> "There it is -- a real response, straight from Qwen through Llama Stack. Inference is working end to end."
+
+```bash
+kill %1
+```
+
+> "The infrastructure layer is ready. Now let's look at the applications."
 
 ---
 

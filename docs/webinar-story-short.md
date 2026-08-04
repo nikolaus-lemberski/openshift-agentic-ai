@@ -47,15 +47,31 @@ Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to 
 
 - Show `LlamaStackDistribution` CR: `oc get llamastackdistribution -n triage-assistant`
 - Show ConfigMap: highlight inference provider (`remote::vllm` -> Qwen). MCP connectors are configured but the MCP servers aren't running yet.
-- Quick test:
+- Port-forward Llama Stack so we can curl it from our own terminal:
 
 ```bash
-oc run curl-test -n triage-assistant --rm -it --restart=Never \
-  --image=registry.access.redhat.com/ubi9/ubi-minimal -- \
-  curl -s http://triage-llamastack-service:8321/v1/models
+oc port-forward -n triage-assistant svc/triage-llamastack-service 8321:8321 &
 ```
 
-> "Infrastructure is ready. Now let's look at the applications."
+- Quick test (model is registered):
+
+```bash
+curl -s http://localhost:8321/v1/models
+```
+
+- Quick test (model actually responds -- straight `/v1/responses` call, no tools):
+
+```bash
+curl -s http://localhost:8321/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model": "qwen-vllm/qwen35-9b", "input": "Say hello in one short sentence."}'
+```
+
+```bash
+kill %1
+```
+
+> "Inference is working end to end. Infrastructure is ready. Now let's look at the applications."
 
 ---
 
