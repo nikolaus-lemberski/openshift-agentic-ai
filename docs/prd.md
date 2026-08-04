@@ -192,7 +192,7 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 | Llama Stack API | `/v1/responses` for server-side agentic orchestration |
 | Model API | OpenAI-compatible (`/v1/chat/completions`, `/v1/models`) between Llama Stack and vLLM |
 | Container runtime | Podman or Docker |
-| GPU requirement | 2x NVIDIA GPUs for Qwen 3.5 9B (tensor-parallel-size=2) |
+| GPU requirement | 1x NVIDIA GPU for Qwen 3.5 9B (quantized, tensor-parallel-size=1) |
 | OpenShift version | 4.16+ with OpenShift AI 3.x |
 
 ---

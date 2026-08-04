@@ -4,13 +4,13 @@ Deploy vLLM model serving with S3/SeaweedFS storage on OpenShift AI. The model i
 
 ## Hardware
 
-- 2x NVIDIA GPUs on g6.12xlarge
-- Model: **Qwen 3.5 9B** with tensor-parallel-size=2
+- 1x NVIDIA GPU on g6.12xlarge
+- Model: **Qwen 3.5 9B FP8** (quantized) with tensor-parallel-size=1
 
 ## Prerequisites
 
 - OpenShift 4.16+ with OpenShift AI 3.x installed
-- GPU node with at least 2x NVIDIA GPUs
+- GPU node with at least 1x NVIDIA GPU
 - SeaweedFS deployed and model uploaded (see below)
 - `oc` CLI logged in as cluster-admin
 
@@ -78,7 +78,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 | Tool calling | `--tool-call-parser=qwen3_xml` + `--enable-auto-tool-choice` |
 | Thinking mode | Disabled (`--default-chat-template-kwargs={"enable_thinking":false}`) |
 | Additional flags | `--language-model-only`, `--gpu-memory-utilization=0.95` |
-| Tensor parallelism | 2 (across 2 GPUs) |
+| Tensor parallelism | 1 (single GPU) |
 | Shared memory | 12Gi |
 | Storage | SeaweedFS S3: `s3://models/qwen3.5-9b` |
 | Namespace | `triage-assistant` |
@@ -87,7 +87,7 @@ oc run curl-test -n triage-assistant --rm -it --restart=Never \
 ## Notes
 
 - **S3/SeaweedFS storage** -- model weights are pulled from HuggingFace via a Kubernetes Job and stored in a SeaweedFS bucket within the cluster.
-- **Tensor parallel** -- the model is split across 2 GPUs; the serving runtime sets `--tensor-parallel-size=2`.
+- **Single GPU** -- the FP8-quantized model fits on one GPU; the serving runtime sets `--tensor-parallel-size=1`.
 - **Single namespace** -- all components (SeaweedFS, model serving, Llama Stack, MCP servers, chat UI) live in `triage-assistant`.
 - **Internal only** -- `serving.kserve.io/disableRouteCreation: "true"` prevents external Route creation.
 - **No auth needed** -- traffic stays within the cluster network.

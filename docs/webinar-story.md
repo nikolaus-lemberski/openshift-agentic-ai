@@ -38,7 +38,7 @@ Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: nam
 
 > "Let me show you the three building blocks."
 
-1. **vLLM on OpenShift AI** -- "Our model runs here. Qwen 3.5 9B as an InferenceService CR. Tensor parallelism across 2 GPUs, cluster-internal only. It exposes an OpenAI-compatible API, so the system is model-agnostic."
+1. **vLLM on OpenShift AI** -- "Our model runs here. Qwen 3.5 9B as an InferenceService CR, quantized to run on a single GPU, cluster-internal only. It exposes an OpenAI-compatible API, so the system is model-agnostic."
 
 2. **Llama Stack / OGX** -- "This is the brain of the system. Not the application -- the *middleware*. One endpoint: `POST /v1/responses`. The entire agentic loop runs server-side: model routing, MCP connectors, and guardrails -- all as config. Deployed via the Llama Stack Operator."
 
@@ -70,7 +70,7 @@ Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: nam
 
 **[SWITCH TO: OpenShift Console or terminal]**
 
-> "Let's start with the model. Qwen 3.5 9B is deployed on OpenShift AI, served by vLLM across 2 GPUs with tensor parallelism."
+> "Let's start with the model. Qwen 3.5 9B is deployed on OpenShift AI, served by vLLM on a single GPU."
 
 **Show:**
 1. The OpenShift AI dashboard with the `InferenceService` in the `triage-assistant` project
@@ -419,7 +419,7 @@ A: Yes. Each request to `/v1/responses` is independent. The Quarkus app manages 
 A: The MCP tools return structured data (triage rules, drug interaction tables), so the agent's recommendations are grounded in tool results, not hallucinated. PromptGuard catches malicious inputs, and in production you'd add Llama Guard for content safety filtering and human-in-the-loop validation. The nurse is always the decision-maker.
 
 **Q: What about latency? The agentic loop runs server-side -- is it slower?**
-A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. Qwen 3.5 9B completes a multi-tool interaction in 5-15 seconds with tensor parallelism across 2 GPUs.
+A: Server-side execution actually reduces latency because there's no network round-trip between client and MCP servers for each tool call. Llama Stack talks to MCP servers directly within the cluster. Qwen 3.5 9B completes a multi-tool interaction in 5-15 seconds on a single GPU.
 
 **Q: Could we use multiple models?**
 A: Absolutely. On a cluster with more GPUs, you could run a small 8B model for 80% of interactions (lookups, scheduling) and a powerful 32B+ model for clinical reasoning. Llama Stack's routing table handles this transparently. They don't even have to be from the same vendor.

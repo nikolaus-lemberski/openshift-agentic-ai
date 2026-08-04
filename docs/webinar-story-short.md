@@ -20,7 +20,7 @@
 
 Three building blocks:
 
-1. **vLLM on OpenShift AI** -- Qwen 3.5 9B as InferenceService CR. Tensor parallelism across 2 GPUs, cluster-internal only. OpenAI-compatible API -- model-agnostic.
+1. **vLLM on OpenShift AI** -- Qwen 3.5 9B (quantized) as InferenceService CR on a single GPU, cluster-internal only. OpenAI-compatible API -- model-agnostic.
 2. **Llama Stack / OGX** -- `POST /v1/responses`. Entire agentic loop runs server-side. Model routing, MCP connectors, and guardrails as config. Deployed via Operator.
 3. **MCP Servers** -- Open standard for tool discovery. Three Quarkus MCP servers: patient records, medical knowledge, scheduling. Composable via Streamable HTTP.
 

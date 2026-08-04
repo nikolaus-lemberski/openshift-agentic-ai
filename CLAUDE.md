@@ -28,8 +28,6 @@ triage-assistant/           Quarkus thin chat UI (REST client → Llama Stack + 
 mcp-patient-records/        MCP server: patient lookup, history, medications
 mcp-medical-knowledge/      MCP server: triage assessment, drug interactions, protocols
 mcp-scheduling/             MCP server: appointment availability and booking
-ogx_configs/                OGX (Llama Stack) configuration
-  openshift-prod.yaml       vLLM + k8s service MCP servers (production reference)
 build.sh                    Build container images with podman
 tag_and_push.sh             Push container images to registry
 scripts/

@@ -80,7 +80,7 @@ graph TD
 
 | Model | Role | GPU Footprint |
 |-------|------|---------------|
-| Qwen 3.5 9B | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | 2x NVIDIA GPUs with tensor-parallel-size=2 |
+| Qwen 3.5 9B | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | 1x NVIDIA GPU, quantized, tensor-parallel-size=1 |
 
 The model weights are distributed as a ModelCar OCI image (`oci://quay.io/nlembers/qwen35-9b-fp8-modelcar:latest`), pulled directly by KServe from the container registry. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
 
@@ -100,7 +100,7 @@ Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can
 - **Decoupling:** The Quarkus application references a logical model name and tool connectors. Models and tools can be swapped, upgraded, or A/B tested as platform operations
 - **Audit trail:** Llama Stack can log which model version produced which response, and which tools were invoked -- critical for clinical AI accountability
 
-**Configuration (OGX v2 config format -- see `ogx_configs/openshift-prod.yaml`):**
+**Configuration (OGX v2 config format -- see `k8s/llamastack/configmap-stack-config.yml`):**
 
 ```yaml
 version: 2
@@ -133,8 +133,6 @@ connectors:
 ```
 
 On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
-
-For local development, `ogx_configs/local-dev.yaml` uses the same structure but with `remote::ollama` as the inference provider and localhost URLs for MCP servers. See [local-dev-environment.md](local-dev-environment.md).
 
 ### 3. Quarkus (Thin Chat UI)
 

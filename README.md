@@ -42,8 +42,6 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 ├── mcp-patient-records/               # Patient Records MCP server
 ├── mcp-medical-knowledge/             # Medical Knowledge MCP server
 ├── mcp-scheduling/                    # Appointment Scheduling MCP server
-├── ogx_configs/                       # OGX (Llama Stack) configuration
-│   └── openshift-prod.yaml            # OGX config: vLLM + k8s service MCP servers
 ├── scripts/
 │   ├── deploy.sh                      # Full infrastructure deployment script
 │   └── pull-model.sh                 # Pull model weights into SeaweedFS
