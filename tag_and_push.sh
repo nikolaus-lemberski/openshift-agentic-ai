@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REGISTRY="quay.io"
-USERNAME="nlembers"
+REGISTRY=quay.io
+USERNAME=$USERNAME
 PREFIX="agentic-ai-webinar-2026"
 TAG="${1:-latest}"
 
