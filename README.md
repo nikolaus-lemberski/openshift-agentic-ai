@@ -1,6 +1,10 @@
 # Agentic AI in regulated environments: with OGX (Llama Stack), Quarkus, and OpenShift AI
 
-GPU: g6.12xlarge
+## Prerequisite
+
+You need OpenShift AI with a GPU (size tested: g6.12xlarge from AWS). If you have a plain OpenShift cluster and a GPU and need inspiration how to create the hardware profile to make the GPU available, check out this repo:
+
+https://github.com/nikolaus-lemberski/openshift-gen-ai-tutorial
 
 ## Abstract
 
