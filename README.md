@@ -66,6 +66,56 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 | Agent Tools | MCP Servers (Quarkus) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift | Container orchestration, GPU management |
 
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         User / Browser                              │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │ WebSocket / REST
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Triage Assistant (Quarkus)                       │
+│              Thin UI - Delegates all AI to Llama Stack              │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │ /v1/responses
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Llama Stack (OGX) - AI Middleware                  │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ Agentic Loop:                                                 │  │
+│  │  1. Route inference to model                                  │  │
+│  │  2. Execute tool calls via MCP                                │  │
+│  │  3. Feed results back to model                                │  │
+│  │  4. Repeat until complete                                     │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+└─────┬────────────────────────────────────┬──────────────────────────┘
+      │                                    │
+      │ Model Inference                    │ MCP Protocol
+      ▼                                    ▼
+┌──────────────────────┐      ┌────────────────────────────────────────┐
+│  OpenShift AI/vLLM   │      │        MCP Servers (Quarkus)           │
+│                      │      │  ┌──────────────────────────────────┐  │
+│  ┌────────────────┐  │      │  │  mcp-patient-records             │  │
+│  │ Qwen 3.5 9B    │  │      │  │  - Get patient info              │  │
+│  │ (S3/SeaweedFS) │  │      │  │  - Search by symptoms            │  │
+│  └────────────────┘  │      │  └──────────────────────────────────┘  │
+│                      │      │  ┌──────────────────────────────────┐  │
+│  GPU: g6.12xlarge    │      │  │  mcp-medical-knowledge           │  │
+└──────────────────────┘      │  │  - Query knowledge base          │  │
+                              │  │  - Get treatment protocols       │  │
+                              │  └──────────────────────────────────┘  │
+                              │  ┌──────────────────────────────────┐  │
+                              │  │  mcp-scheduling                  │  │
+                              │  │  - Check availability            │  │
+                              │  │  - Book appointments             │  │
+                              │  └──────────────────────────────────┘  │
+                              └────────────────────────────────────────┘
+═════════════════════════════════════════════════════════════════════════
+                      OpenShift + OpenShift AI
+                   Container Orchestration & GPU Management
+```
+
 ## Key Architectural Insight
 
 Llama Stack (OGX) is **not** just a model router -- it is the **full AI middleware**. The Quarkus application sends a user message to Llama Stack's `/v1/responses` endpoint. Llama Stack then:
