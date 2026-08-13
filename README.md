@@ -1,60 +1,10 @@
 # Agentic AI in regulated environments: with OGX (Llama Stack), Quarkus, and OpenShift AI
 
+An open-source stack for running on-premise agentic AI with centrally governed models, MCP tool execution, and secure enterprise integrations. A healthcare Patient Triage Assistant demonstrates the architecture. See [ABSTRACT.md](ABSTRACT.md) for full webinar description.
+
 ## Prerequisite
 
-You need OpenShift AI with a GPU (size tested: g6.12xlarge from AWS). If you have a plain OpenShift cluster and a GPU and need inspiration how to create the hardware profile to make the GPU available, check out this repo:
-
-https://github.com/nikolaus-lemberski/openshift-gen-ai-tutorial
-
-## Abstract
-
-Healthcare, finance, public sector -- or any organization that needs to own its data and not depend on external model providers -- these environments need AI agents that run fully on-premise, with centrally governed models and tools, and secure access to internal systems.
-
-This webinar presents an open-source stack for running agentic AI on-prem: **OpenShift AI** to serve models via an inference server (**vLLM**), **OGX (Llama Stack)** as full AI middleware handling model routing, MCP tool execution, and server-side agentic orchestration. **MCP Servers** built with **Quarkus** connect the agent to enterprise backends. A healthcare Patient Triage Assistant serves as the live demo, but the architecture applies to any regulated or data-sovereign environment.
-
-Target audience: Developer, AI engineers, Platform engineers
-
-## German
-
-### Title
-
-Agentic AI in regulierten Umgebungen: mit OGX (Llama Stack), Quarkus und OpenShift AI
-
-### Abstract
-
-Gesundheitswesen, Finanzbranche, öffentliche Hand - oder jede Organisation, die ihre Daten selbst kontrollieren und nicht von externen Modellanbietern abhängig sein will - diese Umgebungen brauchen KI-Agenten, die vollständig On-Premise laufen, mit zentral verwalteten Modellen und Werkzeugen sowie sicherem Zugriff auf interne Systeme.
-
-Dieses Webinar stellt einen Open-Source-Stack für agentische KI On-Premise vor: **OpenShift AI** um Modelle über einen inference server (**vLLM**) bereitzustellen, **OGX (Llama Stack)** als vollständige KI-Middleware für Model-Routing, MCP-Werkzeugausführung und serverseitige agentische Orchestrierung. **MCP-Server** mit **Quarkus** verbinden den Agenten mit Unternehmens-Backends. Ein Patienten-Triage-Assistent dient als Live-Demo, aber die Architektur ist auf jede regulierte oder datensouveräne Umgebung übertragbar.
-
-Empfohlen für: Entwickler, AI engineers, Platform engineers
-
-## Project Structure
-
-```
-.
-├── README.md                          # This file
-├── build.sh                           # Build container images with podman
-├── tag_and_push.sh                    # Push container images to registry
-├── docs/
-│   ├── architecture.md                # Architecture overview and diagrams
-│   ├── prd.md                         # Product Requirements Document
-│   ├── implementation-plan.md         # Step-by-step implementation plan
-│   └── webinar-story.md              # Scripted webinar narrative and demo flow
-├── triage-assistant/                  # Quarkus thin chat UI (REST client to Llama Stack + WebSocket)
-├── mcp-patient-records/               # Patient Records MCP server
-├── mcp-medical-knowledge/             # Medical Knowledge MCP server
-├── mcp-scheduling/                    # Appointment Scheduling MCP server
-├── scripts/
-│   ├── deploy.sh                      # Full infrastructure deployment script
-│   └── pull-model.sh                 # Pull model weights into SeaweedFS
-└── k8s/                               # OpenShift manifests
-    ├── namespace.yml                  # triage-assistant namespace
-    ├── model-serving/                 # ServingRuntime + InferenceService for vLLM
-    ├── llamastack/                    # LlamaStackDistribution CR + stack config ConfigMap
-    ├── seaweedfs/                     # SeaweedFS S3 storage (deployment, PVC, secrets, model pull job)
-    ├── apps/                          # Application deployments, services, and routes
-    └── openshift-ai/                  # OpenShift AI MCP server integration ConfigMap
-```
+OpenShift AI with GPU (tested: g6.12xlarge from AWS). For hardware profile setup, see: https://github.com/nikolaus-lemberski/openshift-gen-ai-tutorial
 
 ## Tech Stack
 
@@ -84,10 +34,11 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 │                  Llama Stack (OGX) - AI Middleware                  │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │ Agentic Loop:                                                 │  │
-│  │  1. Route inference to model                                  │  │
-│  │  2. Execute tool calls via MCP                                │  │
-│  │  3. Feed results back to model                                │  │
-│  │  4. Repeat until complete                                     │  │
+│  │  1. PromptGuard safety filter                                 │  │
+│  │  2. Route inference to model                                  │  │
+│  │  3. Execute tool calls via MCP                                │  │
+│  │  4. Feed results back to model                                │  │
+│  │  5. Repeat until complete                                     │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 └─────┬────────────────────────────────────┬──────────────────────────┘
       │                                    │
@@ -101,13 +52,13 @@ Empfohlen für: Entwickler, AI engineers, Platform engineers
 │  │ (S3/SeaweedFS) │  │      │  │  - Search by symptoms            │  │
 │  └────────────────┘  │      │  └──────────────────────────────────┘  │
 │                      │      │  ┌──────────────────────────────────┐  │
-│  GPU: g6.12xlarge    │      │  │  mcp-medical-knowledge           │  │
-└──────────────────────┘      │  │  - Query knowledge base          │  │
-                              │  │  - Get treatment protocols       │  │
-                              │  └──────────────────────────────────┘  │
-                              │  ┌──────────────────────────────────┐  │
-                              │  │  mcp-scheduling                  │  │
-                              │  │  - Check availability            │  │
+│  ┌────────────────┐  │      │  │  mcp-medical-knowledge           │  │
+│  │ PromptGuard    │  │      │  │  - Query knowledge base          │  │
+│  │ 86M            │  │      │  │  - Get treatment protocols       │  │
+│  └────────────────┘  │      │  └──────────────────────────────────┘  │
+│                      │      │  ┌──────────────────────────────────┐  │
+│  GPU: g6.12xlarge    │      │  │  mcp-scheduling                  │  │
+└──────────────────────┘      │  │  - Check availability            │  │
                               │  │  - Book appointments             │  │
                               │  └──────────────────────────────────┘  │
                               └────────────────────────────────────────┘
@@ -151,4 +102,6 @@ Build container images, push them to the registry, and deploy the full infrastru
 ./scripts/deploy.sh
 ```
 
-The deploy script provisions everything (namespace, SeaweedFS, model serving, Llama Stack, PromptGuard, application deployments) and waits for each component to become ready. See `docs/webinar-story.md` for the demo flow.
+The deploy script provisions everything (namespace, SeaweedFS, model serving, Llama Stack, PromptGuard, application deployments) and waits for each component to become ready. 
+
+**For demo workflow and testing instructions, see `docs/webinar-story.md`.**
