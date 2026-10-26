@@ -204,7 +204,7 @@ The Quarkus application is a **thin chat UI** that sends requests to Llama Stack
 - Persistent conversation storage
 - Multi-tenant support
 - Production-grade error handling and circuit breakers
-- Llama Stack safety shields / guardrails (stretch goal)
+- Llama Stack guardrails via moderation endpoint (stretch goal)
 - Audit trail implementation (discussed conceptually, not built)
 - Load testing and performance benchmarking
 - LangChain4j `@RegisterAiService` / `@McpToolBox` (not needed -- Llama Stack handles orchestration)

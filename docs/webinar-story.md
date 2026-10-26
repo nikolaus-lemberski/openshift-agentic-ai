@@ -40,7 +40,7 @@ Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: nam
 
 1. **vLLM on OpenShift AI** -- "Our model runs here. Qwen 3.5 9B as an InferenceService CR, quantized to run on a single GPU, cluster-internal only. It exposes an OpenAI-compatible API, so the system is model-agnostic."
 
-2. **Llama Stack / OGX** -- "This is the brain of the system. Not the application -- the *middleware*. One endpoint: `POST /v1/responses`. The entire agentic loop runs server-side: model routing, MCP connectors, and guardrails -- all as config. Deployed via the Llama Stack Operator."
+2. **Llama Stack / OGX** -- "This is the brain of the system. Not the application -- the *middleware*. One endpoint: `POST /v1/responses`. The entire agentic loop runs server-side: model routing, MCP connectors, and guardrails -- all as config. Deployed via the OGX Operator."
 
 3. **MCP Servers** -- "These are the agent's hands. An open standard for tool discovery. Three Quarkus MCP servers: patient records, medical knowledge, and scheduling. Composable via Streamable HTTP."
 
@@ -88,12 +88,12 @@ qwen35-9b     True    http://qwen35-9b-predictor.triage-assistant.svc.cluster.lo
 ### OGX (Llama Stack) via Operator (2 min)
 
 **Show:**
-1. The `LlamaStackDistribution` CR
+1. The `OGXServer` CR
 
-> "And here's Llama Stack -- or OGX, the OpenShift GenAI eXchange. This is the custom resource that the Llama Stack Operator manages."
+> "And here's Llama Stack -- or OGX, the OpenShift GenAI eXchange. This is the custom resource that the OGX Operator manages."
 
 ```bash
-oc get llamastackdistribution -n triage-assistant
+oc get ogxserver -n triage-assistant
 # NAME                  READY
 # triage-llamastack     True
 ```
@@ -356,28 +356,23 @@ oc get pods -n triage-assistant -l app=promptguard-service
 # promptguard-service-xxxxx-xxxxx         1/1     Running   0          ...
 ```
 
-> "It's already registered as a safety provider in Llama Stack's config. But the triage assistant isn't using it yet -- it hasn't been told to send requests through the guardrail. Let's activate it. One environment variable:"
+> "It's already wired into Llama Stack's config as the moderation endpoint. But the triage assistant isn't using it yet -- it hasn't been told to send requests through the guardrail. Let's activate it. One environment variable:"
 
-**Show the Llama Stack config already has the safety provider (highlight this is pre-staged):**
+**Show the Llama Stack config already has the moderation endpoint (highlight this is pre-staged):**
 
 ```yaml
 providers:
-  safety:
-    - provider_id: prompt-guard
-      provider_type: remote::passthrough
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
       config:
-        base_url: http://promptguard-service:8080/v1
-
-registered_resources:
-  shields:
-    - shield_id: prompt-guard
-      provider_id: prompt-guard
+        moderation_endpoint: http://promptguard-service:8080/v1/moderations
 ```
 
 **Activate guardrails on the app:**
 
 ```bash
-oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-guard
+oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=true
 ```
 
 > "One command. No Llama Stack restart. No code changes. The platform team pre-staged the security capability, and we just activated it on the application. That's what 'guardrails as a platform operation' means."

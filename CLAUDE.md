@@ -36,7 +36,7 @@ scripts/
 k8s/                        Kubernetes manifests
   namespace.yml             triage-assistant namespace
   model-serving/            ServingRuntime + InferenceService for vLLM on OpenShift AI
-  llamastack/               ConfigMap + LlamaStackDistribution CR
+  llamastack/               ConfigMap + OGXServer CR
   seaweedfs/                SeaweedFS S3 storage (deployment, PVC, secrets, model pull job)
   apps/                     Application deployments, services, routes
   openshift-ai/             OpenShift AI MCP server integration ConfigMap

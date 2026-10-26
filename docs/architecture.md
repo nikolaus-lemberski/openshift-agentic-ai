@@ -88,7 +88,7 @@ Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can
 
 ### 2. Llama Stack (OGX) via Operator (Full AI Middleware)
 
-**What:** A Llama Stack server deployed via the Llama Stack Operator (`LlamaStackDistribution` CR). Provides:
+**What:** A Llama Stack server deployed via the OGX Operator (`OGXServer` CR). Provides:
 - OpenAI-compatible inference routing (`/v1/chat/completions`, `/v1/models`)
 - Server-side agentic orchestration (`/v1/responses`) with MCP tool execution
 - MCP connector management for external tool servers
@@ -104,7 +104,7 @@ Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can
 
 ```yaml
 version: 2
-image_name: rh-dev
+image_name: rh
 providers:
   inference:
     - provider_id: qwen-vllm
@@ -132,7 +132,7 @@ connectors:
     url: "http://mcp-scheduling:8080/mcp"
 ```
 
-On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `LlamaStackDistribution` CR via `userConfig`. The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
+On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `OGXServer` CR via `overrideConfig` (the ConfigMap needs the label `ogx.io/watch: "true"`). The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
 
 ### 3. Quarkus (Thin Chat UI)
 

@@ -26,7 +26,7 @@ Three building blocks:
 
 ### Architecture Walkthrough (3 min) -- [SLIDE 4: Architecture diagram]
 
-Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to Llama Stack -> PromptGuard (input shield) -> vLLM inference -> MCP tool execution -> re-inference -> final answer.
+Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to Llama Stack -> PromptGuard (input guardrail) -> vLLM inference -> MCP tool execution -> re-inference -> final answer.
 
 **Key message:** The app sends one request, Llama Stack delivers the final answer. All tool calls run server-side. Platform team controls models AND tools through K8s resources and Llama Stack config. Swapping a model = `oc apply`. Adding a tool = config change. No PRs, no CI/CD, no redeployments.
 
@@ -45,7 +45,7 @@ Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to 
 
 ### OGX / Llama Stack (2 min)
 
-- Show `LlamaStackDistribution` CR: `oc get llamastackdistribution -n triage-assistant`
+- Show `OGXServer` CR: `oc get ogxserver -n triage-assistant`
 - Show ConfigMap: highlight inference provider (`remote::vllm` -> Qwen). MCP connectors are configured but the MCP servers aren't running yet.
 - Port-forward Llama Stack so we can curl it from our own terminal:
 
@@ -202,12 +202,12 @@ Show pods: `oc get pods -n triage-assistant`
 
 - ProtectAI's DeBERTa-v3 prompt injection detector -- 86M params, Apache 2.0, runs on CPU.
 - Already deployed and registered in Llama Stack as part of infrastructure. Show pod: `oc get pods -n triage-assistant -l app=promptguard-service`
-- Show the Llama Stack config already has the safety provider pre-staged.
+- Show the Llama Stack config already has the moderation endpoint pre-staged.
 
 Activate:
 
 ```bash
-oc set env deployment/triage-assistant -n triage-assistant GUARDRAIL_IDS=prompt-guard
+oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=true
 ```
 
 One command, no Llama Stack restart, no code changes. Platform team pre-staged the capability, activation is config-only.

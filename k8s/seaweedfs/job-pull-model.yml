@@ -24,15 +24,7 @@ data:
     print(f"Destination: s3://{BUCKET}/{BUCKET_PATH}/")
     print()
 
-    print("[1/3] Downloading model from HuggingFace...")
-    snapshot_download(
-        repo_id=MODEL_REPO,
-        local_dir=LOCAL_DIR,
-        local_dir_use_symlinks=False,
-    )
-    print("Download complete.")
-
-    print("[2/3] Connecting to S3 (SeaweedFS)...")
+    print("[1/3] Connecting to S3 (SeaweedFS)...")
     s3 = boto3.client(
         "s3",
         endpoint_url=S3_ENDPOINT,
@@ -47,17 +39,38 @@ data:
         print(f"Creating bucket '{BUCKET}'...")
         s3.create_bucket(Bucket=BUCKET)
 
-    print("[3/3] Uploading to SeaweedFS...")
-    local_path = Path(LOCAL_DIR)
-    files = [f for f in local_path.rglob("*") if f.is_file()]
-    total = len(files)
+    # Marker written after a full upload -- re-runs skip the 13 GB transfer
+    marker_key = f"{BUCKET_PATH}/.complete"
+    try:
+        s3.head_object(Bucket=BUCKET, Key=marker_key)
+        already_uploaded = True
+    except Exception:
+        already_uploaded = False
 
-    for i, file_path in enumerate(files, 1):
-        relative = file_path.relative_to(local_path)
-        key = f"{BUCKET_PATH}/{relative}"
-        size_mb = file_path.stat().st_size / (1024 * 1024)
-        print(f"  [{i}/{total}] {relative} ({size_mb:.1f} MB)")
-        s3.upload_file(str(file_path), BUCKET, key)
+    if already_uploaded:
+        print(f"[2/3] Model already in s3://{BUCKET}/{BUCKET_PATH}/ -- skipping download and upload.")
+    else:
+        print("[2/3] Downloading model from HuggingFace...")
+        snapshot_download(
+            repo_id=MODEL_REPO,
+            local_dir=LOCAL_DIR,
+            local_dir_use_symlinks=False,
+        )
+        print("Download complete.")
+
+        print("[3/3] Uploading to SeaweedFS...")
+        local_path = Path(LOCAL_DIR)
+        files = [f for f in local_path.rglob("*") if f.is_file()]
+        total = len(files)
+
+        for i, file_path in enumerate(files, 1):
+            relative = file_path.relative_to(local_path)
+            key = f"{BUCKET_PATH}/{relative}"
+            size_mb = file_path.stat().st_size / (1024 * 1024)
+            print(f"  [{i}/{total}] {relative} ({size_mb:.1f} MB)")
+            s3.upload_file(str(file_path), BUCKET, key)
+
+        s3.put_object(Bucket=BUCKET, Key=marker_key, Body=b"")
 
     print()
     print("[3b/3] Patching tokenizer_config.json for vLLM compatibility...")

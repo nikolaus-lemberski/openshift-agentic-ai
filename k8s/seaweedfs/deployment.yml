@@ -7,6 +7,8 @@ metadata:
     app: seaweedfs
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: seaweedfs
@@ -22,8 +24,8 @@ spec:
             - server
             - -s3
             - -s3.config=/etc/seaweedfs/s3.json
-            - -volume.max=0
-            - -master.volumeSizeLimitMB=30000
+            - -volume.max=30
+            - -master.volumeSizeLimitMB=1024
             - -dir=/data
           ports:
             - containerPort: 8333

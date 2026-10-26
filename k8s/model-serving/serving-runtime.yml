@@ -27,6 +27,9 @@ spec:
         - --model=/mnt/models
         - --served-model-name={{.Name}}
         - --tensor-parallel-size=1
+        # Thinking off: OGX output guardrails also moderate reasoning text,
+        # which PromptGuard misreads as prompt injection
+        - '--default-chat-template-kwargs={"enable_thinking": false}'
       env:
         - name: HOME
           value: /tmp

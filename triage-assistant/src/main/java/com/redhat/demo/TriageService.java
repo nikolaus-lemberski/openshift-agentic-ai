@@ -1,7 +1,6 @@
 package com.redhat.demo;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -23,8 +22,8 @@ public class TriageService {
     @ConfigProperty(name = "triage.system-prompt")
     String systemPrompt;
 
-    @ConfigProperty(name = "triage.guardrail-ids")
-    Optional<List<String>> guardrailIds;
+    @ConfigProperty(name = "triage.guardrails-enabled", defaultValue = "false")
+    boolean guardrailsEnabled;
 
     @ConfigProperty(name = "triage.mcp.patient-records.url")
     String patientRecordsUrl;
@@ -43,10 +42,8 @@ public class TriageService {
     }
 
     public ChatResponse chat(String userMessage, String previousResponseId) {
-        var guards = guardrailIds
-                .map(ids -> ids.stream().filter(s -> s != null && !s.isBlank()).toList())
-                .filter(ids -> !ids.isEmpty())
-                .orElse(null);
+        // null omits the field; true runs the input through the moderation endpoint (PromptGuard)
+        Boolean guards = guardrailsEnabled ? Boolean.TRUE : null;
         var request = new ResponseRequest(model, systemPrompt, userMessage, getTools(), previousResponseId, "default",
                 guards);
         try {
@@ -54,8 +51,8 @@ public class TriageService {
             return buildChatResponse(result);
         } catch (WebApplicationException e) {
             if (e.getResponse().getStatus() == 400 && previousResponseId != null) {
-                // Llama Stack can't serialize MCP tool outputs from conversation history
-                // for guardrail evaluation; retry without conversation context
+                // OGX guardrails can't serialize MCP tool outputs from conversation history
+                // ("Unsupported content type: list"); retry without conversation context
                 var retry = new ResponseRequest(model, systemPrompt, userMessage, getTools(), null, "default", guards);
                 var result = llamaStack.createResponse(retry);
                 return buildChatResponse(result);
@@ -64,8 +61,9 @@ public class TriageService {
         }
     }
 
+    // Qwen's chat template opens <think> in the prompt, so output is often "reasoning...</think>answer"
     private static final java.util.regex.Pattern THINK_PATTERN =
-            java.util.regex.Pattern.compile("<think>.*?</think>\\s*|<think>.*$|</think>\\s*", java.util.regex.Pattern.DOTALL);
+            java.util.regex.Pattern.compile("^.*</think>\\s*|<think>.*$", java.util.regex.Pattern.DOTALL);
 
     private ChatResponse buildChatResponse(ResponseResult result) {
         var text = new StringBuilder();

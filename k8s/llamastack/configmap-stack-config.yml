@@ -5,10 +5,11 @@ metadata:
   namespace: triage-assistant
   labels:
     app.kubernetes.io/part-of: triage-assistant
+    ogx.io/watch: "true"
 data:
   config.yaml: |
     version: '2'
-    image_name: rh-dev
+    image_name: rh
 
     apis:
       - responses
@@ -16,7 +17,6 @@ data:
       - vector_io
       - files
       - tool_runtime
-      - safety
 
     providers:
       inference:
@@ -41,11 +41,6 @@ data:
             persistence:
               namespace: vector_io::sqlite_vec
               backend: kv_default
-      safety:
-        - provider_id: prompt-guard
-          provider_type: remote::passthrough
-          config:
-            base_url: http://promptguard-service:8080/v1
       tool_runtime:
         - provider_id: file-search
           provider_type: inline::file-search
@@ -54,6 +49,8 @@ data:
         - provider_id: builtin
           provider_type: inline::builtin
           config:
+            # Guardrails: requests with "guardrails": true are checked here
+            moderation_endpoint: http://promptguard-service:8080/v1/moderations
             persistence:
               agent_state:
                 namespace: agents
@@ -70,10 +67,6 @@ data:
           model_type: llm
           metadata:
             _unprefixed_alias: true
-      shields:
-        - shield_id: prompt-guard
-          provider_id: prompt-guard
-          provider_resource_id: deberta-prompt-injection-v2
 
     connectors:
       - connector_id: "mcp::patient-records"

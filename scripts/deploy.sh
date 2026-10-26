@@ -8,12 +8,48 @@ NAMESPACE="${NAMESPACE:-triage-assistant}"
 ISVC_NAME="qwen35-9b"
 MODEL_TIMEOUT="${MODEL_TIMEOUT:-600s}"
 
+# Wait for a Job to finish; unlike `oc wait --for=condition=Complete`,
+# this returns immediately when the Job fails instead of hanging until timeout.
+wait_for_job() {
+  local job="$1" timeout="$2" elapsed=0 status
+  while [ "$elapsed" -lt "$timeout" ]; do
+    status=$(oc get job "$job" -n "${NAMESPACE}" \
+      -o jsonpath='{.status.conditions[?(@.status=="True")].type}')
+    case "$status" in
+      *Complete*) return 0 ;;
+      *Failed*)   echo "Job '$job' failed."; return 1 ;;
+    esac
+    sleep 10
+    elapsed=$((elapsed + 10))
+  done
+  echo "Job '$job' timed out after ${timeout}s."
+  return 1
+}
+
 echo "============================================"
 echo "  Triage Assistant - Infrastructure Deploy"
 echo "============================================"
 echo ""
 echo "Namespace:     ${NAMESPACE}"
 echo "Model timeout: ${MODEL_TIMEOUT}"
+echo ""
+
+# ─── Phase 0: Enable OGX (Llama Stack) in OpenShift AI ─────────────────────
+
+echo "=== Phase 0: Enable OGX operator ==="
+echo ""
+echo "[1/1] Setting DataScienceCluster component 'ogx' to Managed..."
+echo "      (RHOAI 3.5+: replaces 'llamastackoperator', which must be Removed first)"
+DSC_NAME=$(oc get datasciencecluster -o jsonpath='{.items[0].metadata.name}')
+oc patch datasciencecluster "${DSC_NAME}" --type=merge \
+  -p '{"spec":{"components":{"llamastackoperator":{"managementState":"Removed"},"ogx":{"managementState":"Managed"}}}}'
+
+echo "Waiting for OGXServer CRD..."
+for _ in $(seq 1 30); do
+  oc get crd ogxservers.ogx.io &>/dev/null && break
+  sleep 10
+done
+oc wait --for=condition=Established crd/ogxservers.ogx.io --timeout=120s
 echo ""
 
 # ─── Phase 1: Namespace ─────────────────────────────────────────────────────
@@ -77,10 +113,9 @@ oc apply -f "${K8S_DIR}/seaweedfs/job-pull-model.yml"
 
 echo ""
 echo "Waiting for model pull Job to complete (this may take 10-30 minutes)..."
-oc wait --for=condition=Complete "job/pull-qwen35-9b" \
-  -n "${NAMESPACE}" --timeout=1800s || {
+wait_for_job pull-qwen35-9b 1800 || {
   echo ""
-  echo "WARNING: Model pull job did not complete within 30 minutes."
+  echo "WARNING: Model pull job did not complete."
   echo "Check status: oc logs -f job/pull-qwen35-9b -n ${NAMESPACE}"
   echo "Continuing with deployment (model serving will wait for S3 data)..."
   echo ""
@@ -126,22 +161,19 @@ fi
 echo "=== Phase 5: OGX (Llama Stack) ==="
 echo ""
 
-echo "[1/3] Applying OGX ConfigMap..."
+echo "[1/2] Applying OGX ConfigMap..."
 oc apply -f "${K8S_DIR}/llamastack/configmap-stack-config.yml"
 
-echo "[2/3] Deploying LlamaStackDistribution..."
-oc apply -f "${K8S_DIR}/llamastack/llamastack-distribution.yml"
-
-echo "[3/3] Creating LlamaStack Service..."
-oc apply -f "${K8S_DIR}/llamastack/service.yml"
+echo "[2/2] Deploying OGXServer (operator also creates triage-llamastack-service)..."
+oc apply -f "${K8S_DIR}/llamastack/ogx-server.yml"
 
 echo ""
 echo "Waiting for OGX pod to be ready..."
 oc wait --for=condition=Ready pod \
   -l app.kubernetes.io/instance=triage-llamastack \
-  -n "${NAMESPACE}" --timeout=120s || {
+  -n "${NAMESPACE}" --timeout=300s || {
   echo ""
-  echo "WARNING: OGX pod did not become ready within 120s."
+  echo "WARNING: OGX pod did not become ready within 300s."
   echo "Check status: oc get pods -n ${NAMESPACE} -l app.kubernetes.io/instance=triage-llamastack"
   echo ""
 }
@@ -160,10 +192,9 @@ oc apply -f "${K8S_DIR}/promptguard/job-pull-promptguard.yml"
 
 echo ""
 echo "Waiting for PromptGuard model pull Job to complete..."
-oc wait --for=condition=Complete "job/pull-promptguard" \
-  -n "${NAMESPACE}" --timeout=600s || {
+wait_for_job pull-promptguard 600 || {
   echo ""
-  echo "WARNING: PromptGuard model pull job did not complete within 10 minutes."
+  echo "WARNING: PromptGuard model pull job did not complete."
   echo "  Logs: oc logs -f job/pull-promptguard -n ${NAMESPACE}"
   echo "Continuing with deployment..."
   echo ""
@@ -226,13 +257,14 @@ echo "Increasing VLLM_MAX_TOKENS for the GenAI playground (Qwen 3.5 thinking"
 echo "mode consumes many tokens on reasoning before producing visible output)..."
 echo ""
 
-if oc get llamastackdistribution lsd-genai-playground -n "${NAMESPACE}" &>/dev/null; then
-  oc patch llamastackdistribution lsd-genai-playground -n "${NAMESPACE}" \
+if oc get ogxserver lsd-genai-playground -n "${NAMESPACE}" &>/dev/null; then
+  oc patch ogxserver lsd-genai-playground -n "${NAMESPACE}" \
     --type='json' \
-    -p='[{"op":"replace","path":"/spec/server/containerSpec/env","value":[{"name":"VLLM_TLS_VERIFY","value":"false"},{"name":"MILVUS_DB_PATH","value":"~/.llama/milvus.db"},{"name":"FMS_ORCHESTRATOR_URL","value":"http://localhost"},{"name":"VLLM_MAX_TOKENS","value":"8192"},{"name":"VLLM_API_TOKEN_1","value":"fake"},{"name":"LLAMA_STACK_CONFIG_DIR","value":"/opt/app-root/src/.llama/distributions/rh/"}]}]'
-  echo "  Patched: VLLM_MAX_TOKENS 4096 -> 8192"
+    -p='[{"op":"add","path":"/spec/workload/overrides/env/-","value":{"name":"VLLM_MAX_TOKENS","value":"8192"}}]' \
+    && echo "  Patched: VLLM_MAX_TOKENS=8192" \
+    || echo "  WARNING: could not patch playground env -- set VLLM_MAX_TOKENS=8192 manually."
 else
-  echo "  GenAI playground LlamaStackDistribution not found (created via RHOAI UI)."
+  echo "  GenAI playground OGXServer not found (created via RHOAI UI)."
   echo "  Skipping -- apply manually after creating the playground connection."
 fi
 echo ""
@@ -247,7 +279,7 @@ echo "Deployed:"
 echo "  - Namespace:        ${NAMESPACE}"
 echo "  - SeaweedFS:        seaweedfs.${NAMESPACE}.svc:8333 (S3 API)"
 echo "  - Model:            ${ISVC_NAME} (vLLM)"
-echo "  - OGX (Llama Stack): triage-llamastack.${NAMESPACE}.svc:8321 (safety provider pre-registered)"
+echo "  - OGX (Llama Stack): triage-llamastack-service.${NAMESPACE}.svc:8321 (moderation endpoint pre-configured)"
 echo "  - PromptGuard:      promptguard-service.${NAMESPACE}.svc:8080 (dormant until activated)"
 echo "  - Route timeout:    300s on data-science-gateway and rhods-dashboard"
 echo "  - GenAI playground: VLLM_MAX_TOKENS=8192 (if playground exists)"
@@ -261,5 +293,5 @@ echo "  3. Deploy the triage assistant app:"
 echo "       oc apply -f k8s/apps/triage-assistant/"
 echo ""
 echo "  4. To activate guardrails during the demo:"
-echo "       oc set env deployment/triage-assistant -n ${NAMESPACE} GUARDRAIL_IDS=prompt-guard"
+echo "       oc set env deployment/triage-assistant -n ${NAMESPACE} GUARDRAILS_ENABLED=true"
 echo ""
