@@ -54,6 +54,13 @@ docs/                       Architecture, webinar script
 6. **Three separate MCP servers** (not one monolith) to demonstrate composability.
 7. **Streamable HTTP transport** for all MCP servers (not deprecated SSE, not STDIO).
 
+## Webinar narrative
+
+Code must support the stories told on screen:
+- **Middleware-first** — the Quarkus app stays intentionally thin; one request in, one final response out.
+- **Model-agnostic** — swapping models is a ConfigMap change, no app changes.
+- **Tool governance** — MCP connectors are managed in Llama Stack, not in the app.
+
 ## Coding conventions
 
 - Java 21+ with Quarkus 3.x LTS
