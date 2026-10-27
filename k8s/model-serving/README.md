@@ -20,8 +20,8 @@ Deploy vLLM model serving with S3/SeaweedFS storage on OpenShift AI. The model i
 # 1. Deploy SeaweedFS
 oc apply -f k8s/seaweedfs/
 
-# 2. Pull model into SeaweedFS (runs as a Job in-cluster)
-./scripts/pull-model.sh
+# 2. Pull model into SeaweedFS (runs as a Job in-cluster; skips download if already present)
+oc apply -f k8s/seaweedfs/job-pull-model.yml
 oc logs -f job/pull-qwen35-9b -n triage-assistant
 
 # 3. Deploy ServingRuntime and InferenceService

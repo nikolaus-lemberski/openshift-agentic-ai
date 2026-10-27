@@ -5,9 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record ToolConfig(
         String type,
         @JsonProperty("server_label") String serverLabel,
-        @JsonProperty("server_url") String serverUrl) {
+        @JsonProperty("connector_id") String connectorId) {
 
-    public static ToolConfig mcp(String label, String url) {
-        return new ToolConfig("mcp", label, url);
+    // The connector (and its URL) is registered in OGX; the app only knows its ID
+    public static ToolConfig mcp(String connectorId) {
+        return new ToolConfig("mcp", connectorId.replace("mcp::", ""), connectorId);
     }
 }

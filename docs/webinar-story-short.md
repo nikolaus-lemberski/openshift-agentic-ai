@@ -41,7 +41,7 @@ Walk through the data flow: Nurse -> Quarkus Chat UI -> `POST /v1/responses` to 
 ### Model Serving (3 min) -- [SWITCH TO: OpenShift Console / terminal]
 
 - Show the InferenceService: `oc get inferenceservices -n triage-assistant`
-- Model is internal-only, no external Route. Weights distributed as a ModelCar OCI image.
+- Model is internal-only, no external Route. Weights stored in an in-cluster S3 bucket (SeaweedFS).
 
 ### OGX / Llama Stack (2 min)
 
@@ -132,8 +132,8 @@ oc apply -f k8s/openshift-ai/gen-ai-aa-mcp-servers.yml
 
 ### The Code (2 min) -- [SWITCH TO: IDE]
 
-- **`TriageService.java`** -- Entire AI service: REST client call to `/v1/responses`, system prompt, connector IDs. No MCP client, no agentic loop, no LangChain4j.
-- **`application.properties`** -- One URL to Llama Stack, model name, system prompt. No MCP server URLs. App is decoupled from both models and tools.
+- **`TriageService.java`** -- Entire AI service: REST client call to `/v1/responses`, system prompt, connector IDs (`mcp::patient-records`, ...). No MCP client, no agentic loop, no LangChain4j.
+- **`application.properties`** -- One URL to Llama Stack, model name, system prompt, connector IDs. No MCP server URLs. App is decoupled from both models and tools.
 
 ### Deploying (2 min) -- [SWITCH TO: Terminal]
 
@@ -200,7 +200,7 @@ Show pods: `oc get pods -n triage-assistant`
 
 ### Activating PromptGuard (2 min) -- [SWITCH TO: Terminal]
 
-- ProtectAI's DeBERTa-v3 prompt injection detector -- 86M params, Apache 2.0, runs on CPU.
+- ProtectAI's DeBERTa-v3 prompt injection detector -- 86M params, Apache 2.0, runs on a GPU here (small enough for CPU too).
 - Already deployed and registered in Llama Stack as part of infrastructure. Show pod: `oc get pods -n triage-assistant -l app=promptguard-service`
 - Show the Llama Stack config already has the moderation endpoint pre-staged.
 
@@ -224,6 +224,8 @@ One command, no Llama Stack restart, no code changes. Platform team pre-staged t
 
 **Expected:** Normal patient lookup works as before. PromptGuard only blocks attacks.
 
+OGX moderates input *and* output, and fails closed: if PromptGuard is unreachable, requests are blocked.
+
 Three defense layers: model safety training, system prompt guardrails, PromptGuard injection detection. Platform-managed, no app changes.
 
 ---
@@ -234,10 +236,10 @@ Key takeaways (delivered verbally):
 
 1. **Data stays on-premise.** OpenShift AI hosts models inside hospital infrastructure. Patient data never leaves the cluster.
 2. **Llama Stack is full middleware.** Model routing, MCP tool execution, server-side agentic loop. Model AND tool switching are platform ops.
-3. **MCP makes the agent extensible.** Three Quarkus MCP servers. Adding capability = deploy MCP server + add connector. No app changes.
+3. **MCP makes the agent extensible.** Three Quarkus MCP servers. Adding capability = deploy MCP server + register connector + app opts in by ID. No app code changes.
 4. **Thin application by design.** One REST call per message. No MCP client, no agentic loop. All orchestration is middleware.
 5. **OpenShift AI provides platform governance.** MCP servers registered centrally. GenAI Playground for prototyping and auditing.
 6. **Guardrails are a platform operation.** PromptGuard enabled via config. Security controls managed by platform team.
-7. **Zero vendor lock-in.** Switch models with a ConfigMap change. App is decoupled from model layer.
+7. **Zero vendor lock-in.** Switch models with a ConfigMap change; the operator rolls out Llama Stack automatically. App is decoupled from model layer.
 
 Applies to any regulated industry: financial services, government, defense. The stack is the same.

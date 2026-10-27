@@ -8,8 +8,9 @@ spec:
     name: rh
   network:
     port: 8321
+    # Internal only: the chat UI reaches OGX via the cluster Service
     externalAccess:
-      enabled: true
+      enabled: false
   overrideConfig:
     name: triage-llamastack-config
     key: config.yaml

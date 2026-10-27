@@ -232,7 +232,7 @@ echo ""
 echo "=== Phase 8: OpenShift AI Gateway Timeout ==="
 echo ""
 echo "Configuring route timeouts for LLM inference (default 30s is too low"
-echo "for Qwen 3.5 thinking mode which can take 60-120s+)..."
+echo "for multi-step agentic requests in the GenAI playground)..."
 echo ""
 
 echo "[1/2] Annotating data-science-gateway route (300s timeout)..."
@@ -249,26 +249,6 @@ oc annotate route rhods-dashboard \
 
 echo ""
 
-# ─── Phase 9: GenAI Playground Token Budget ───────────────────────────────
-
-echo "=== Phase 9: GenAI Playground Token Budget ==="
-echo ""
-echo "Increasing VLLM_MAX_TOKENS for the GenAI playground (Qwen 3.5 thinking"
-echo "mode consumes many tokens on reasoning before producing visible output)..."
-echo ""
-
-if oc get ogxserver lsd-genai-playground -n "${NAMESPACE}" &>/dev/null; then
-  oc patch ogxserver lsd-genai-playground -n "${NAMESPACE}" \
-    --type='json' \
-    -p='[{"op":"add","path":"/spec/workload/overrides/env/-","value":{"name":"VLLM_MAX_TOKENS","value":"8192"}}]' \
-    && echo "  Patched: VLLM_MAX_TOKENS=8192" \
-    || echo "  WARNING: could not patch playground env -- set VLLM_MAX_TOKENS=8192 manually."
-else
-  echo "  GenAI playground OGXServer not found (created via RHOAI UI)."
-  echo "  Skipping -- apply manually after creating the playground connection."
-fi
-echo ""
-
 # ─── Summary ────────────────────────────────────────────────────────────────
 
 echo "============================================"
@@ -282,7 +262,6 @@ echo "  - Model:            ${ISVC_NAME} (vLLM)"
 echo "  - OGX (Llama Stack): triage-llamastack-service.${NAMESPACE}.svc:8321 (moderation endpoint pre-configured)"
 echo "  - PromptGuard:      promptguard-service.${NAMESPACE}.svc:8080 (dormant until activated)"
 echo "  - Route timeout:    300s on data-science-gateway and rhods-dashboard"
-echo "  - GenAI playground: VLLM_MAX_TOKENS=8192 (if playground exists)"
 echo ""
 echo "Next steps:"
 echo "  1. Deploy the MCP servers:"

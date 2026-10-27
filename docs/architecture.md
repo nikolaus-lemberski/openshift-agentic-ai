@@ -56,20 +56,20 @@ graph TD
 | MCP tool discovery | Llama Stack (connectors) |
 | MCP tool execution | Llama Stack (server-side) |
 | Agentic loop (inference -> tool call -> re-inference) | Llama Stack (`/v1/responses`) |
-| Model switching | Platform team (update Llama Stack ConfigMap + restart) |
+| Model switching | Platform team (update Llama Stack ConfigMap; the operator rolls out the pod) |
 | Tool switching | Platform team (update connectors in Llama Stack config) |
 | Chat UI + system prompt | Application team (Quarkus app) |
 
 **What this means for governance:**
 - The **platform team** controls which models AND which tools are available -- via Kubernetes CRs and Llama Stack config
 - The **application team** builds the UI and defines the system prompt
-- Adding a new MCP server (e.g., a lab results tool) requires zero application changes -- just add a connector in Llama Stack
+- Adding a new MCP server (e.g., a lab results tool) requires zero application code changes -- register a connector in Llama Stack, and the app opts in by listing its connector ID in config
 
 ## Layer-by-Layer Justification
 
 ### 1. OpenShift AI + vLLM (Model Serving)
 
-**What:** An LLM deployed as an `InferenceService` custom resource, running vLLM as the serving runtime with OCI/ModelCar storage.
+**What:** An LLM deployed as an `InferenceService` custom resource, running vLLM as the serving runtime. Model weights are stored in an in-cluster S3 bucket (SeaweedFS).
 
 **Why it must exist:**
 - HIPAA and GDPR mandate that patient data (symptoms, medical history, medication lists) never leaves the hospital's infrastructure
@@ -82,7 +82,7 @@ graph TD
 |-------|------|---------------|
 | Qwen 3.5 9B | All tasks: patient lookup, triage, drug interactions, scheduling -- excellent tool calling | 1x NVIDIA GPU, quantized, tensor-parallel-size=1 |
 
-The model weights are distributed as a ModelCar OCI image (`oci://quay.io/nlembers/qwen35-9b-fp8-modelcar:latest`), pulled directly by KServe from the container registry. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
+The model weights are downloaded from HuggingFace by a one-off Job into SeaweedFS (`s3://models/qwen3.5-9b`) and pulled from there by the KServe storage-initializer. Qwen's thinking mode is disabled in the ServingRuntime (`enable_thinking: false`) -- see Guardrails below. The InferenceService is internal-only via cluster Service (no external Route). Llama Stack accesses it at `http://qwen35-9b-predictor:8080`.
 
 Note: Llama Stack is model-agnostic. Any model with an OpenAI-compatible API can be swapped in by deploying a new InferenceService and updating the Llama Stack provider config.
 
@@ -132,7 +132,19 @@ connectors:
     url: "http://mcp-scheduling:8080/mcp"
 ```
 
-On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `OGXServer` CR via `overrideConfig` (the ConfigMap needs the label `ogx.io/watch: "true"`). The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
+On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) and referenced by the `OGXServer` CR via `overrideConfig`. With the label `ogx.io/watch: "true"`, the operator watches the ConfigMap and rolls out the OGX pod automatically on every change (zero-downtime rolling update, ~20s). The `remote::vllm` provider auto-registers the model as `qwen-vllm/qwen35-9b` (provider-prefixed). The model is also registered with a logical alias `triage-model` via the `registered_resources` section.
+
+**What the operator manages for us (OGX on RHOAI 3.5):**
+- The Deployment and the Service (`triage-llamastack-service`, port 8321)
+- A NetworkPolicy that only admits traffic from the same namespace and the OpenShift AI dashboard
+- No external exposure: `externalAccess.enabled: false`. The chat UI reaches OGX through the cluster Service.
+- Automatic rollout on ConfigMap changes (see above)
+
+The `OGXServer` CR also has a declarative mode (`spec.providers`, `spec.resources`) that generates the config from the CR. It has no field for MCP connectors, so this demo keeps the full config in the ConfigMap (`overrideConfig`).
+
+**MCP connectors:** The `connectors:` block registers each MCP server under an ID. The app references only these IDs (`connector_id`); OGX resolves them to URLs. Two caveats on OGX 1.2.5 (RHOAI 3.5):
+- **Bug:** while resolving a `connector_id`, OGX sends a second MCP `initialize` on an already-initialized session. Spec-compliant servers such as Quarkus MCP reject it (`Unsupported method: initialize`), and the request fails with a 500. Each MCP server therefore contains a small `OgxReinitializeWorkaround` class that turns the repeated `initialize` into a fresh session. Delete it once OGX is fixed (`get_mcp_server_info` in `ogx/providers/utils/tools/mcp.py`).
+- **No enforcement:** OGX still accepts raw `server_url` MCP tools in `/v1/responses` and has no allowlist (upstream issue ogx-ai/ogx#6287, SSRF). Connectors are the governance pattern, but OGX doesn't enforce it. Restricting OGX egress with `spec.network.policy` limits the impact.
 
 ### 3. Quarkus (Thin Chat UI)
 
@@ -156,7 +168,9 @@ On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) a
 - No agentic loop management
 - No direct model calls
 
-**Conceptual request to Llama Stack:**
+The connector IDs come from `triage.connectors` in `application.properties` (overridable via `TRIAGE_CONNECTORS`). OGX requires `server_label`; the app derives it from the ID.
+
+**Request to Llama Stack:**
 
 ```json
 {
@@ -164,9 +178,9 @@ On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) a
   "instructions": "You are a clinical triage assistant for hospital nurses...",
   "input": "Patient Maria Garcia, DOB 1978-03-15, headaches and blurred vision...",
   "tools": [
-    { "type": "mcp", "connector_id": "mcp::patient-records" },
-    { "type": "mcp", "connector_id": "mcp::medical-knowledge" },
-    { "type": "mcp", "connector_id": "mcp::scheduling" }
+    { "type": "mcp", "server_label": "patient-records", "connector_id": "mcp::patient-records" },
+    { "type": "mcp", "server_label": "medical-knowledge", "connector_id": "mcp::medical-knowledge" },
+    { "type": "mcp", "server_label": "scheduling", "connector_id": "mcp::scheduling" }
   ]
 }
 ```
@@ -177,7 +191,7 @@ On OpenShift, the config is stored in a ConfigMap (`triage-llamastack-config`) a
 
 **Why MCP (not direct REST or hardcoded tools):**
 - **Standardized discovery:** Llama Stack discovers tool descriptions (name, parameters, return type) automatically via MCP protocol
-- **Decoupled:** Add, remove, or update MCP servers by changing Llama Stack's connector config -- no application changes
+- **Decoupled:** Move or update MCP servers by changing Llama Stack's connector config -- the app only knows connector IDs
 - **Ecosystem:** MCP is an open standard; these servers could be consumed by any MCP-compatible client
 
 **Why self-contained mocks (not real backends):**
@@ -209,6 +223,29 @@ graph LR
         SCData["In-memory: sample schedule"]
     end
 ```
+
+### 5. Guardrails (PromptGuard via OGX Moderation)
+
+**What:** A small Python service wrapping ProtectAI's DeBERTa-v3 prompt-injection classifier, exposed as an OpenAI-compatible `POST /v1/moderations` endpoint. OGX calls it through the `moderation_endpoint` of the `inline::builtin` responses provider:
+
+```yaml
+providers:
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
+      config:
+        moderation_endpoint: http://promptguard-service:8080/v1/moderations
+```
+
+**How it works:**
+- The endpoint is configured once by the platform team. Requests opt in with `"guardrails": true` (the app sends this when `GUARDRAILS_ENABLED=true`).
+- OGX moderates the **input** before inference and the **output** (content and reasoning) while it is generated.
+- **Fail-closed:** if the moderation endpoint is unreachable, the request is blocked rather than passed through.
+- Any OpenAI-compatible moderation service (Llama Guard, a vendor model, an in-house classifier) can replace PromptGuard without app changes.
+
+**Known limitations (OGX on RHOAI 3.5):**
+- Output moderation also checks reasoning text, which PromptGuard misreads as injection. Qwen's thinking mode is therefore disabled in the ServingRuntime.
+- With guardrails on, follow-up turns that use `previous_response_id` fail with a 400 when the history contains MCP tool output. The app retries without the conversation context, so the follow-up turn loses context.
 
 ## Data Flow: A Single Triage Interaction
 
@@ -258,7 +295,7 @@ sequenceDiagram
 
 ## Model-Agnostic Architecture
 
-The app doesn't touch models OR tools -- both are platform operations. To swap the model behind Llama Stack (e.g., from Mistral to Granite or Qwen), the platform team updates the ConfigMap with a new `remote::vllm` provider URL (pointing at a different InferenceService) and restarts the Llama Stack pod. The Quarkus app is unaffected -- it continues calling Llama Stack's `/v1/responses` endpoint.
+The app doesn't touch models OR tools -- both are platform operations. To swap the model behind Llama Stack (e.g., from Mistral to Granite or Qwen), the platform team updates the ConfigMap with a new `remote::vllm` provider URL (pointing at a different InferenceService). The OGX operator detects the change and rolls out the Llama Stack pod automatically. The Quarkus app is unaffected -- it continues calling Llama Stack's `/v1/responses` endpoint.
 
 ```mermaid
 sequenceDiagram
@@ -270,7 +307,7 @@ sequenceDiagram
     Note over OpsTeam: AI committee approves<br/>a new model for triage
 
     OpsTeam->>OC: Update ConfigMap:<br/>change inference provider URL
-    OC->>LSServer: Rollout restart picks up new config
+    OC->>LSServer: Operator detects ConfigMap change,<br/>rolls out pod with new config
 
     Note over QuarkusApp: No restart needed.<br/>Next request uses new model.
 
@@ -292,10 +329,10 @@ sequenceDiagram
 
     Note over OpsTeam: Hospital deploys new<br/>Lab Results MCP server
 
-    OpsTeam->>OC: Update Llama Stack config:<br/>add connector mcp::lab-results
-    OC->>LSServer: New connector registered
+    OpsTeam->>OC: Update Llama Stack ConfigMap:<br/>add connector mcp::lab-results
+    OC->>LSServer: Operator rolls out pod,<br/>new connector registered
 
-    Note over QuarkusApp: App optionally adds<br/>"mcp::lab-results" to tools list.<br/>Or Llama Stack auto-discovers.
+    Note over QuarkusApp: App opts in via config:<br/>TRIAGE_CONNECTORS += mcp::lab-results<br/>(no code change)
 
     QuarkusApp->>LSServer: POST /v1/responses<br/>tools: [..., mcp::lab-results]
     LSServer->>LabMCP: MCP: getRecentLabResults(patientId)
@@ -321,7 +358,7 @@ sequenceDiagram
 │  │          ▼                              │                  │  │
 │  │  ┌────────────────────────┐            │                  │  │
 │  │  │ Llama Stack OGX        │────────────┘                  │  │
-│  │  │ (LlamaStackDist)       │                               │  │
+│  │  │ (OGXServer)            │                               │  │
 │  │  │ Connects to MCP        │                               │  │
 │  │  │ servers via connectors │                               │  │
 │  │  └────────────────────────┘                               │  │
@@ -336,4 +373,4 @@ sequenceDiagram
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Note: The Quarkus Chat UI **only** communicates with Llama Stack. It has no direct connection to MCP servers or vLLM instances. All tool execution and model inference is handled by Llama Stack within the cluster.
+Note: Llama Stack has no external Route or Ingress, and its operator-managed NetworkPolicy only admits traffic from inside the namespace and from the OpenShift AI dashboard. The Quarkus Chat UI **only** communicates with Llama Stack. It has no direct connection to MCP servers or vLLM instances. All tool execution and model inference is handled by Llama Stack within the cluster.

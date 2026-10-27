@@ -10,7 +10,7 @@
 
 ## Prerequisites
 
-Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: namespace, vLLM InferenceService (model weights via ModelCar OCI image), OGX (Llama Stack), and PromptGuard. The Quarkus applications are **not** deployed yet -- MCP servers and the triage assistant app are deployed live during the demo in separate steps.
+Run `scripts/deploy.sh` before the webinar. This deploys the infrastructure: namespace, vLLM InferenceService (model weights in an in-cluster SeaweedFS S3 bucket), OGX (Llama Stack), and PromptGuard. The Quarkus applications are **not** deployed yet -- MCP servers and the triage assistant app are deployed live during the demo in separate steps.
 
 ---
 
@@ -83,7 +83,7 @@ qwen35-9b     True    http://qwen35-9b-predictor.triage-assistant.svc.cluster.lo
 
 > "The model is internal-only -- no external Route, accessible only within the cluster. Patient data never leaves the cluster."
 
-> "The model weights are packaged as a ModelCar OCI image -- just like any container image -- and pulled directly from the registry. No separate storage layer needed. Everything stays inside the cluster."
+> "The model weights live in an S3 bucket inside the cluster -- SeaweedFS in our case, in production whatever object storage the hospital already runs. Everything stays inside the cluster."
 
 ### OGX (Llama Stack) via Operator (2 min)
 
@@ -240,11 +240,11 @@ oc apply -f k8s/openshift-ai/gen-ai-aa-mcp-servers.yml
 
 **Show `TriageService.java`:**
 
-> "This is the entire AI service. A REST client call to Llama Stack's `/v1/responses` endpoint. The system prompt. The connector IDs for MCP tools. That's it. No MCP client. No agentic loop. No LangChain4j. Just a REST call."
+> "This is the entire AI service. A REST client call to Llama Stack's `/v1/responses` endpoint. The system prompt. The connector IDs for MCP tools -- just names like `mcp::patient-records`, no URLs. That's it. No MCP client. No agentic loop. No LangChain4j. Just a REST call."
 
 **Show `application.properties`:**
 
-> "The configuration: one URL to Llama Stack, a model name, and the system prompt. No MCP server URLs -- those are configured in Llama Stack, not here. The application is completely decoupled from both the models and the tools. The app team doesn't need to know how the MCP servers are implemented or where they run."
+> "The configuration: one URL to Llama Stack, a model name, the system prompt, and the list of connector IDs this app may use. No MCP server URLs -- those are configured in Llama Stack, not here. The application is completely decoupled from both the models and the tools. The app team doesn't need to know how the MCP servers are implemented or where they run."
 
 ### Deploying (2 min)
 
@@ -348,7 +348,7 @@ oc get pods -n triage-assistant
 
 **[SWITCH TO: Terminal]**
 
-> "PromptGuard is already running on the cluster -- the platform team deployed it as part of the infrastructure. It's ProtectAI's DeBERTa-v3 prompt injection detector -- an 86-million parameter model, Apache 2.0 licensed, specifically trained to detect prompt injection attacks. It runs as a lightweight microservice on CPU -- no GPU required."
+> "PromptGuard is already running on the cluster -- the platform team deployed it as part of the infrastructure. It's ProtectAI's DeBERTa-v3 prompt injection detector -- an 86-million parameter model, Apache 2.0 licensed, specifically trained to detect prompt injection attacks. It runs as a lightweight microservice -- on a GPU here, but it is small enough to run on CPU too."
 
 ```bash
 oc get pods -n triage-assistant -l app=promptguard-service
@@ -386,7 +386,7 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=tr
 
 **Expected response:** A blocked message -- the request is rejected by PromptGuard before it reaches the LLM.
 
-> "Blocked. PromptGuard classified that as a prompt injection attempt with 100% confidence and stopped it before it ever reached Qwen. The LLM never saw that message. Zero GPU cycles wasted on a malicious request."
+> "Blocked. PromptGuard classified that as a prompt injection attempt and stopped it before it ever reached Qwen. The LLM never saw that message. Zero GPU cycles wasted on a malicious request."
 
 **Now type a normal query to prove it still works:**
 > `Patient Maria Garcia, date of birth March 15 1978, is here for intake. Pull up her records.`
@@ -394,6 +394,8 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=tr
 **Expected response:** Normal patient lookup works as before.
 
 > "And normal triage queries work exactly as before. PromptGuard only blocks attacks -- it doesn't interfere with legitimate clinical workflows."
+
+> "Two more things matter in a regulated environment. First, OGX checks both directions: the input before it reaches the model, and the output while it is being generated. Second, it fails closed. If the guardrail service is down, requests are blocked, not waved through."
 
 > "This is what defense-in-depth looks like. The model has its own safety training. The system prompt provides behavioral guardrails. And now PromptGuard adds a dedicated security layer that catches injection attempts before they reach the model. Three layers. Platform-managed. No application changes."
 
@@ -409,7 +411,7 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=tr
 
 2. **Llama Stack is full middleware, not just a gateway.** It routes models, discovers and executes MCP tools, and runs the agentic loop server-side. Both model switching and tool switching are platform operations.
 
-3. **MCP servers make the agent extensible.** Three Quarkus MCP servers, each with just a few annotated Java methods. Adding a new capability means deploying a new MCP server and adding a connector in Llama Stack. No application changes.
+3. **MCP servers make the agent extensible.** Three Quarkus MCP servers, each with just a few annotated Java methods. Adding a new capability means deploying a new MCP server, registering a connector in Llama Stack, and letting the app opt in by connector ID. No application code changes.
 
 4. **The application is intentionally thin.** The Quarkus chat UI makes one REST call per user message. No MCP client logic. No agentic loop. All orchestration is delegated to the middleware.
 
@@ -417,7 +419,7 @@ oc set env deployment/triage-assistant -n triage-assistant GUARDRAILS_ENABLED=tr
 
 6. **Guardrails are a platform operation.** PromptGuard detects prompt injection and jailbreak attacks before they reach the model. Enabling it is a config change -- no application code changes. Security controls are managed by the platform team, not the application team.
 
-7. **Zero vendor lock-in.** The app doesn't know or care which model is behind Llama Stack. Switching from Qwen to Granite, Llama, or Mistral is a ConfigMap change + restart. No code changes. No redeployments.
+7. **Zero vendor lock-in.** The app doesn't know or care which model is behind Llama Stack. Switching from Qwen to Granite, Llama, or Mistral is a ConfigMap change -- the operator rolls out Llama Stack automatically. No code changes. No app redeployments.
 
 > "This architecture applies to any regulated industry -- financial services, government, defense -- anywhere you need data sovereignty, model governance, and enterprise integration. The stack is the same."
 
@@ -442,8 +444,17 @@ A: Absolutely. On a cluster with more GPUs, you could run a small 8B model for 8
 **Q: What if Llama Stack goes down?**
 A: The Operator manages replicas and health checks. In production you'd run multiple Llama Stack instances behind a Kubernetes Service. For the demo, we keep it simple.
 
+**Q: How do I roll out a config change to Llama Stack?**
+A: Edit the ConfigMap. The OGX operator watches it (label `ogx.io/watch: "true"`) and does a zero-downtime rolling update of the Llama Stack pod -- about 20 seconds in our cluster.
+
 **Q: Can I use this with models other than Qwen?**
 A: Yes. Llama Stack OGX supports 50+ providers. Any model with an OpenAI-compatible API (vLLM, TGI, Ollama, cloud providers) can be a provider. We chose Qwen for its tool-calling quality, but Granite, Llama, Mistral, or any other model works. The application doesn't change.
+
+**Q: What happens if the guardrail service is down?**
+A: OGX fails closed: if the moderation endpoint can't be reached, the request is blocked. For a clinical system that is the safe default. In production you'd run PromptGuard with multiple replicas.
+
+**Q: Can I use a different guardrail model?**
+A: Yes. OGX accepts any OpenAI-compatible `/v1/moderations` endpoint. Llama Guard, a vendor model, or an in-house classifier can replace PromptGuard with a one-line config change.
 
 **Q: How hard is it to connect to a real EHR system?**
 A: The MCP server interface stays the same. Replace the in-memory data store with calls to FHIR/HL7 APIs. The `@Tool` method signatures don't change -- only the implementation.
@@ -452,7 +463,7 @@ A: The MCP server interface stays the same. Replace the in-memory data store wit
 A: You could, and it would work. But then MCP tool management is in the application, not the middleware. You'd need a code change or config update in the app to add/remove tools. With Llama Stack as full middleware, tool governance is a platform operation -- the application stays untouched.
 
 **Q: Can the agent access tools that aren't registered in Llama Stack?**
-A: The app sends connector IDs in the `/v1/responses` request. Only connectors that are registered in Llama Stack config are available. This is a security feature: the platform team controls which tools the agent can use.
+A: The app sends connector IDs in the `/v1/responses` request, and only connectors registered in Llama Stack config resolve. The platform team controls which tools exist and where they point. Caveat: OGX today also accepts a raw `server_url` MCP tool and has no allowlist yet (upstream issue ogx-ai/ogx#6287). In production, restrict Llama Stack's egress with a NetworkPolicy and keep it off external networks -- as we do here: no Route, operator-managed NetworkPolicy.
 
 **Q: What's the GenAI Playground in OpenShift AI?**
 A: It's a built-in interface in OpenShift AI that lets you interact with models and MCP tools directly from the dashboard. You can select a model, attach registered MCP servers, and test agentic workflows without writing an application. It's useful for prototyping, debugging, and compliance auditing.

@@ -17,7 +17,7 @@ The Quarkus app is a **thin chat UI** — calls Llama Stack `/v1/responses`, ren
 |-------|------|---------|
 | Chat UI | Quarkus + WebSockets + REST Client | Thin UI → Llama Stack `/v1/responses` |
 | AI Middleware | Llama Stack (OGX) via Operator | Model routing, MCP connectors, server-side agentic loop |
-| Model Serving | OpenShift AI 3.4 + vLLM | On-prem LLM hosting (Qwen 3.5 9B via S3/SeaweedFS) |
+| Model Serving | OpenShift AI 3.5 + vLLM | On-prem LLM hosting (Qwen 3.5 9B via S3/SeaweedFS) |
 | Agent Tools | 3× Quarkus MCP Servers (Streamable HTTP) | Patient records, medical knowledge, scheduling |
 | Platform | OpenShift 4.16+ | Container orchestration |
 
@@ -32,7 +32,6 @@ build.sh                    Build container images with podman
 tag_and_push.sh             Push container images to registry
 scripts/
   deploy.sh                 Full infrastructure deployment script
-  pull-model.sh             Pull model weights into SeaweedFS
 k8s/                        Kubernetes manifests
   namespace.yml             triage-assistant namespace
   model-serving/            ServingRuntime + InferenceService for vLLM on OpenShift AI
@@ -40,7 +39,9 @@ k8s/                        Kubernetes manifests
   seaweedfs/                SeaweedFS S3 storage (deployment, PVC, secrets, model pull job)
   apps/                     Application deployments, services, routes
   openshift-ai/             OpenShift AI MCP server integration ConfigMap
-docs/                       Architecture, PRD, implementation plan, webinar script
+  promptguard/              PromptGuard moderation service (guardrails)
+promptguard-service/        PromptGuard source (OpenAI-compatible /v1/moderations)
+docs/                       Architecture, webinar script
 ```
 
 ## Key design decisions
@@ -48,8 +49,8 @@ docs/                       Architecture, PRD, implementation plan, webinar scri
 1. **Llama Stack is the full middleware.** The Quarkus app does NOT handle MCP client logic. Tool discovery, execution, and the agentic loop are server-side via `/v1/responses`. Model and tool switching are platform ops, not code changes.
 2. **MCP servers are self-contained mocks.** Hardcoded sample data in memory. No databases, no external deps. In production, only the `@Tool` implementation changes.
 3. **No LangChain4j.** Plain Quarkus REST Client to Llama Stack. No framework coupling.
-4. **Configurable model name.** `MODEL_NAME` env var. On OpenShift: `qwen-vllm/qwen35-9b`. Locally: `triage-model` alias. Switching = ConfigMap + Llama Stack restart.
-5. **MCP connectors in Llama Stack config**, not in the Quarkus app. App references connector IDs (`mcp::patient-records`, etc.) in `/v1/responses`.
+4. **Configurable model name.** `MODEL_NAME` env var. On OpenShift: `qwen-vllm/qwen35-9b`. Locally: `triage-model` alias. Switching = ConfigMap change; the OGX operator rolls out the pod automatically (`ogx.io/watch` label).
+5. **MCP connectors in Llama Stack config**, not in the Quarkus app. App references connector IDs (`mcp::patient-records`, etc.) in `/v1/responses` via `triage.connectors` — no MCP URLs in the app. Each MCP server has an `OgxReinitializeWorkaround` class for an OGX connector bug (see `docs/architecture.md`); remove it once OGX is fixed.
 6. **Three separate MCP servers** (not one monolith) to demonstrate composability.
 7. **Streamable HTTP transport** for all MCP servers (not deprecated SSE, not STDIO).
 
@@ -83,5 +84,4 @@ docs/                       Architecture, PRD, implementation plan, webinar scri
 ## Reference docs
 
 - `docs/webinar-story.md` — full scripted demo flow
-- `docs/prd.md` — detailed sample data specifications
 - `docs/architecture.md` — diagrams and data flow

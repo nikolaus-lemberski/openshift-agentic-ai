@@ -25,20 +25,11 @@ public class TriageService {
     @ConfigProperty(name = "triage.guardrails-enabled", defaultValue = "false")
     boolean guardrailsEnabled;
 
-    @ConfigProperty(name = "triage.mcp.patient-records.url")
-    String patientRecordsUrl;
-
-    @ConfigProperty(name = "triage.mcp.medical-knowledge.url")
-    String medicalKnowledgeUrl;
-
-    @ConfigProperty(name = "triage.mcp.scheduling.url")
-    String schedulingUrl;
+    @ConfigProperty(name = "triage.connectors")
+    List<String> connectors;
 
     List<ToolConfig> getTools() {
-        return List.of(
-                ToolConfig.mcp("patient-records", patientRecordsUrl),
-                ToolConfig.mcp("medical-knowledge", medicalKnowledgeUrl),
-                ToolConfig.mcp("scheduling", schedulingUrl));
+        return connectors.stream().map(ToolConfig::mcp).toList();
     }
 
     public ChatResponse chat(String userMessage, String previousResponseId) {
@@ -60,10 +51,6 @@ public class TriageService {
             throw e;
         }
     }
-
-    // Qwen's chat template opens <think> in the prompt, so output is often "reasoning...</think>answer"
-    private static final java.util.regex.Pattern THINK_PATTERN =
-            java.util.regex.Pattern.compile("^.*</think>\\s*|<think>.*$", java.util.regex.Pattern.DOTALL);
 
     private ChatResponse buildChatResponse(ResponseResult result) {
         var text = new StringBuilder();
@@ -97,13 +84,9 @@ public class TriageService {
 
         String finalText = text.isEmpty()
                 ? "I wasn't able to generate a response. Please try again."
-                : stripThinkingBlocks(text.toString());
+                : text.toString().strip();
 
         return new ChatResponse(result.id(), finalText, toolCalls, refused);
-    }
-
-    private String stripThinkingBlocks(String text) {
-        return THINK_PATTERN.matcher(text).replaceAll("").strip();
     }
 
     public record ChatResponse(String responseId, String text, List<String> toolCalls, boolean refused) {
